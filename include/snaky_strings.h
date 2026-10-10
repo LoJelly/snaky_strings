@@ -154,6 +154,22 @@ typedef enum snaky_fwrite_mode
 	/**
 	  Results in plain text being
 	  written to the file.
+
+	  @important When using snaky_write_file_data(...)
+	  with SNAKY_FWRITE_TEXT,
+	  each entry in the map is
+	  written in its own attribute
+	  string. For example,
+	  if the map contains 2 entries,
+	  they are written as 2 individual
+	  attribute strings even if they
+	  may be in the same string originally.
+	  This is because snaky_attrib_data maps
+	  only know about the entries, and nothing
+	  about the starting and ending positions
+	  in attribute strings. If you want to
+	  preserve the actual attribute strings,
+	  use snaky_write_file_str(...) instead.
 	*/
 	SNAKY_FWRITE_TEXT,
 	/**
@@ -291,9 +307,9 @@ SNAKY_API int snaky_realloc_str(snaky_string *str, size_t bytes);
   @param attrib_name The name of the attribute to search for.
   @param out_start_pos A pointer to a const char*. If a valid pointer
   is given, it will be equal to the position in the original
-  string where the target attribute's value was found. Example,
-  in this attribute string '<attrib=VALUE>' the out_start_pos pointer would
-  point to the 'V' character after the '=.'
+  string where the next attribute starts. Specifically, it will point
+  to the first character in the next attribute name found. If no next
+  attribute is found, then the pointer will be equal to NULL.
   @param out_data_type A pointer to a snaky_data_type. If a valid pointer
   is given, it will be equal to the data type of the parsed attribute.
 
@@ -557,12 +573,32 @@ SNAKY_API int snaky_read_file_data(const char *file_path, snaky_attrib_data *dat
 /**
   Opens a file and writes an attribute list to it.
 
+  @note If using SNAKY_FWRITE_TEXT, the entries in the map
+  are automatically written to the file in their own
+  attribute strings.
+
   @param file_path The file path.
-  @param data The attribute data to write
+  @param data The attribute data to write.
+
+  @return 1 on success, 0 on failure.
+
+  @see SNAKY_FWRITE_TEXT
+*/
+SNAKY_API int snaky_write_file_data(const char *file_path, snaky_attrib_data *data, snaky_fwrite_mode mode);
+/**
+  Opens a file and writes attribute strings to it.
+
+  @note If using SNAKY_FWRITE_BINARY or SNAKY_FWRITE_ENCRYPT
+  the function behaves the same as snaky_write_file_data(...).
+  However, SNAKY_FWRITE_TEXT behaves differently, as it will
+  write the string exactly as it is presented.
+
+  @param file_path The file path.
+  @param str The attribute string to write.
 
   @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_write_file(const char *file_path, snaky_attrib_data *data, snaky_fwrite_mode mode);
+SNAKY_API int snaky_write_file_str(const char *file_path, snaky_string *string, snaky_fwrite_mode mode);
 /**
   Obtains the next line in a buffer that contains the lines from
   a read file.
