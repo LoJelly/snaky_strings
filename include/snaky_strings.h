@@ -47,6 +47,11 @@
 #endif
 
 /**
+  Represents any kind of invalid value within snaky_strings.
+*/
+#define SNAKY_INVALID_VALUE -1
+
+/**
   Represents a map with attribute names as the keys
   and attribute values as the values.
 */
@@ -73,11 +78,6 @@ typedef struct snaky_attrib_data
 	*/
 	bool alloc_failure;
 } snaky_attrib_data;
-
-/**
-  Represents any kind of invalid value within snaky_strings.
-*/
-#define SNAKY_INVALID_VALUE -1
 
 /**
   The different data types in snaky_strings.
@@ -316,7 +316,7 @@ SNAKY_API int snaky_realloc_str(snaky_string *str, size_t bytes);
   @return 1 if the attribute was successfully parsed/found, 0 if the
   function fails in any way.
 */
-SNAKY_API int snaky_parse_target_attrib(const char *str, char *buffer, size_t buffer_size, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_target_attrib_buf(const char *str, char *buffer, size_t buffer_size, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type);
 /**
   Same as snaky_parse_target_attrib(...) but uses a snaky_string instead
   of a char buffer.
@@ -337,7 +337,7 @@ SNAKY_API int snaky_parse_target_attrib_str(const char *str, snaky_string *buffe
 
   @see snaky_parse_target_attrib(const char*, char*, size_t, const char*, const char**, snaky_data_type*)
 */
-SNAKY_API int snaky_parse_attrib(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_attrib_buf(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type);
 /**
   Same as snaky_parse_attrib(...) but uses snaky_strings for the name and value
   char buffers.
@@ -353,7 +353,7 @@ SNAKY_API int snaky_parse_attrib_str(const char *str, snaky_string *name_str, sn
 
   @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_remove_attrib(char *str, const char *attrib_name);
+SNAKY_API int snaky_remove_attrib_buf(char *str, const char *attrib_name);
 /**
   Same as snaky_remove_attrib(...) but uses a snaky_string instead.
 
@@ -369,7 +369,7 @@ SNAKY_API int snaky_remove_attrib_str(snaky_string *str, const char *attrib_name
 
   @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_set_attrib(char *str, size_t buffer_size, const char *attrib_name, const char *new_attrib_value);
+SNAKY_API int snaky_set_attrib_buf(char *str, size_t buffer_size, const char *attrib_name, const char *new_attrib_value);
 /**
   Same as snaky_set_attrib(...) but uses a snaky_string instead.
 
@@ -398,7 +398,7 @@ SNAKY_API int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, c
 
   @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_set_attribs(char *str, size_t buffer_size, const char *attribs);
+SNAKY_API int snaky_set_attribs_buf(char *str, size_t buffer_size, const char *attribs);
 /**
   Same as snaky_set_attribs(...) but uses a snaky_string instead.
 
@@ -550,7 +550,7 @@ SNAKY_API long snaky_get_file_size(const char *file_path);
 
   @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_read_file(const char *file_path, char *buffer, size_t buffer_size);
+SNAKY_API int snaky_read_file_buf(const char *file_path, char *buffer, size_t buffer_size);
 /**
   Same as snaky_read_file(...)
   but uses a snaky_string instead.

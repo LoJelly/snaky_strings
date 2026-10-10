@@ -460,7 +460,7 @@ static int parse_target_attrib(const char *attribs_start, char *buffer, size_t b
 
 	return 1;
 }
-int snaky_parse_target_attrib(const char *str, char *buffer, size_t buffer_size, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type)
+int snaky_parse_target_attrib_buf(const char *str, char *buffer, size_t buffer_size, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type)
 {
 	size_t attrib_len = attrib_name ? strlen(attrib_name) : 0;
 
@@ -725,7 +725,7 @@ static int parse_target_attrib_str(const char *attribs_start, snaky_string *buff
 
 	return 1;
 }
-SNAKY_API int snaky_parse_target_attrib_str(const char *str, snaky_string *buffer, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type)
+int snaky_parse_target_attrib_str(const char *str, snaky_string *buffer, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type)
 {
 	size_t attrib_len = attrib_name ? strlen(attrib_name) : 0;
 
@@ -970,7 +970,7 @@ static int parse_attrib(const char *attribs_start, char *name_buffer, size_t nam
 
 	return 1;
 }
-int snaky_parse_attrib(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
+int snaky_parse_attrib_buf(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
 {
 	if(!str || strlen(str) == 0 || !name_buffer || name_buffer_size == 0 || !value_buffer || value_buffer_size == 0)
 		return 0;
@@ -1259,7 +1259,7 @@ int snaky_parse_attrib_str(const char *str, snaky_string *name_str, snaky_string
 	return 0;
 }
 
-int snaky_remove_attrib(char *str, const char *attrib_name)
+int snaky_remove_attrib_buf(char *str, const char *attrib_name)
 {
 	size_t attrib_name_len = attrib_name ? strlen(attrib_name) : 0;
 
@@ -1269,7 +1269,7 @@ int snaky_remove_attrib(char *str, const char *attrib_name)
 	// see if the attrib is found
 	const char *start_pos = NULL;
 	char attrib_value[SNAKY_BUF_SIZE + 1];
-	if(!snaky_parse_target_attrib(str, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
+	if(!snaky_parse_target_attrib_buf(str, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
 	{
 		vl_log(VL_ERROR, "The '%s' attribute was not found in this string: '%s'!\n", attrib_name, str);
 		return 0;
@@ -1310,7 +1310,7 @@ int snaky_remove_attrib_str(snaky_string *str, const char *attrib_name)
 	// see if the attrib is found
 	const char *start_pos = NULL;
 	char attrib_value[SNAKY_BUF_SIZE + 1];
-	if(!snaky_parse_target_attrib(str->data, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
+	if(!snaky_parse_target_attrib_buf(str->data, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
 	{
 		vl_log(VL_ERROR, "The '%s' attribute was not found in this string: '%s'!\n", attrib_name, str);
 		return 0;
@@ -1349,7 +1349,7 @@ static void insert_char_buf(char *buffer, char c)
 	memmove(buffer + 1, buffer, strlen(buffer) + 1);
 	*(buffer++) = c;
 }
-int snaky_set_attrib(char *str, size_t buffer_size, const char *attrib_name, const char *new_attrib_value)
+int snaky_set_attrib_buf(char *str, size_t buffer_size, const char *attrib_name, const char *new_attrib_value)
 {
 	size_t str_len = strlen(str);
 
@@ -1362,7 +1362,7 @@ int snaky_set_attrib(char *str, size_t buffer_size, const char *attrib_name, con
 	const char *start_pos = NULL;
 
 	char attrib_value[SNAKY_BUF_SIZE + 1];
-	if(snaky_parse_target_attrib(str, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
+	if(snaky_parse_target_attrib_buf(str, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
 	{
 		edit_pos = (char*) start_pos;
 		// curr_len is equal to length of the found attribute value
@@ -1499,7 +1499,7 @@ int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char 
 	const char *start_pos = NULL;
 
 	char attrib_value[SNAKY_BUF_SIZE + 1];
-	if(snaky_parse_target_attrib(str->data, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
+	if(snaky_parse_target_attrib_buf(str->data, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
 	{
 		edit_pos = (char*) start_pos;
 		// curr_len is equal to length of the found attribute value
@@ -1625,7 +1625,7 @@ int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char 
 
 	return 1;
 }
-int snaky_set_attribs(char *str, size_t buffer_size, const char *attribs)
+int snaky_set_attribs_buf(char *str, size_t buffer_size, const char *attribs)
 {
 	if(!str || strlen(str) >= buffer_size || buffer_size == 0 || !attribs || strlen(attribs) == 0)
 		return 0;
@@ -1642,7 +1642,7 @@ int snaky_set_attribs(char *str, size_t buffer_size, const char *attribs)
 			const char *val = attribs_data.values[i];
 
 			// set it
-			if(!snaky_set_attrib(str, buffer_size, name, val))
+			if(!snaky_set_attrib_buf(str, buffer_size, name, val))
 				return 0;
 		}
 
@@ -1656,7 +1656,7 @@ int snaky_set_attribs(char *str, size_t buffer_size, const char *attribs)
 int snaky_set_attribs_str(snaky_string *str, const char *attribs)
 {
 	// TODO dont just use set_attribs(), copy logic but use snaky_realloc_str when necessary
-	int s = snaky_set_attribs(str->data, str->size, attribs);
+	int s = snaky_set_attribs_buf(str->data, str->size, attribs);
 	str->len = strlen(str->data);
 	return s;
 }
@@ -1675,7 +1675,7 @@ size_t snaky_count_attribs(const char *str)
 		// an attrib is counted when the 'name=value' format is found exactly
 		char name[SNAKY_BUF_SIZE + 1];
 		char value[SNAKY_BUF_SIZE + 1];
-		if(snaky_parse_attrib(p, name, sizeof(name), value, sizeof(value), NULL, NULL))
+		if(snaky_parse_attrib_buf(p, name, sizeof(name), value, sizeof(value), NULL, NULL))
 			count++;
 	}
 
@@ -1863,7 +1863,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 
 		// try to parse as a target attribute:
 		char attrib[SNAKY_BUF_SIZE + 1];
-		if(snaky_parse_target_attrib(origin, attrib, sizeof(attrib), attrib_name, NULL, NULL))
+		if(snaky_parse_target_attrib_buf(origin, attrib, sizeof(attrib), attrib_name, NULL, NULL))
 		{
 			float f = 0.0f;
 			int s = 0;
@@ -2232,7 +2232,7 @@ long snaky_get_file_size(const char *file_path)
 
 	return bytes;
 }
-int snaky_read_file(const char *file_path, char *buffer, size_t buffer_size)
+int snaky_read_file_buf(const char *file_path, char *buffer, size_t buffer_size)
 {
 	if(!file_path || strlen(file_path) == 0 || !buffer || buffer_size == 0)
 		return 0;
