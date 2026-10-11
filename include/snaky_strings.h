@@ -22,7 +22,7 @@
   Define SNAKY_CUSTOM_BUF_SIZE to change the default
   buffer size in snaky_strings.
 
-  The default buffer size is 256.
+  The default buffer size is 64.
 */
 #ifdef SNAKY_CUSTOM_BUF_SIZE
 	#define SNAKY_BUF_SIZE SNAKY_CUSTOM_BUF_SIZE
@@ -30,7 +30,7 @@
 	/**
 	  The default size of char buffers in snaky_strings.
 	*/
-	#define SNAKY_BUF_SIZE 256
+	#define SNAKY_BUF_SIZE 64
 #endif
 
 /**
@@ -369,7 +369,7 @@ SNAKY_API int snaky_remove_attrib_str(snaky_string *str, const char *attrib_name
 
   @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_set_attrib_buf(char *str, size_t buffer_size, const char *attrib_name, const char *new_attrib_value);
+SNAKY_API int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name, const char *new_attrib_value);
 /**
   Same as snaky_set_attrib(...) but uses a snaky_string instead.
 
@@ -414,24 +414,19 @@ SNAKY_API int snaky_set_attribs_str(snaky_string *str, const char *attribs);
 SNAKY_API size_t snaky_count_attribs(const char *str);
 
 /**
+  Determines if an attribute list is an object/group.
+*/
+SNAKY_API bool snaky_is_object(const char *str);
+
+/**
   Obtains all the data within an attribute string.
 
-  @note If the map has to be initialized, the function
-  automatically does it for you.
+  @note This function will not automatically initialize
+  the data map for you.
 
   @return 1 on success, 0 on failure.
 */
 SNAKY_API int snaky_get_attrib_data(const char *str, snaky_attrib_data *data);
-/**
-  Obtains all the data within an attribute string,
-  using a snaky_string.
-
-  @note If the map has to be initialized, the function
-  automatically does it for you.
-
-  @see snaky_get_attrib_data(const char*, snaky_attrib_data*)
-*/
-SNAKY_API int snaky_get_attrib_data_str(const snaky_string *str, snaky_attrib_data *data);
 
 /**
   Reads a character attribute value and obtains the actual
@@ -547,23 +542,24 @@ SNAKY_API long snaky_get_file_size(const char *file_path);
   @param file_path The file path.
   @param buffer Where the file's contents should be placed.
   @param buffer_size The size of 'buffer' in bytes.
+  @param mode The file write mode to use.
 
   @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_read_file_buf(const char *file_path, char *buffer, size_t buffer_size);
+SNAKY_API int snaky_read_file_buf(const char *file_path, char *buffer, size_t buffer_size, snaky_fwrite_mode mode);
 /**
   Same as snaky_read_file(...)
   but uses a snaky_string instead.
 
-  @see snaky_read_file(const char*, char*, size_t)
+  @see snaky_read_file(const char*, char*, size_t, snaky_fwrite_mode)
 */
-SNAKY_API int snaky_read_file_str(const char *file_path, snaky_string *str);
+SNAKY_API int snaky_read_file_str(const char *file_path, snaky_string *str, snaky_fwrite_mode mode);
 /**
   Reads a file's contents and inserts it all into
   a snaky_attrib_data map.
 
-  @note If the map needs to be initialized, the function
-  automatically does it for you.
+  @note This function will not automatically initialize
+  the data map for you.
 
   @return 1 on success, 0 on failure.
 
@@ -594,11 +590,12 @@ SNAKY_API int snaky_write_file_data(const char *file_path, snaky_attrib_data *da
   write the string exactly as it is presented.
 
   @param file_path The file path.
-  @param str The attribute string to write.
+  @param buffer The attribute string to write.
+  @param mode The file write mode to use.
 
   @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_write_file_str(const char *file_path, snaky_string *string, snaky_fwrite_mode mode);
+SNAKY_API int snaky_write_file_buf(const char *file_path, const char *buffer, snaky_fwrite_mode mode);
 /**
   Obtains the next line in a buffer that contains the lines from
   a read file.
