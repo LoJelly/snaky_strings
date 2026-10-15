@@ -10,8 +10,9 @@ option(BUILD_SHARED_LIBS "Build using a shared library." ON)
 
 include(FetchContent)
 FetchContent_Declare(vibrant_logs GIT_REPOSITORY https://github.com/lojelly/VibrantLogs.git GIT_TAG main)
+FetchContent_Declare(dynamic_array_spellbook GIT_REPOSITORY https://github.com/lojelly/DynamicArraySpellbook.git GIT_TAG main)
 FetchContent_Declare(dynamic_map_spellbook GIT_REPOSITORY https://github.com/lojelly/DynamicMapSpellbook.git GIT_TAG main)
-FetchContent_MakeAvailable(vibrant_logs dynamic_map_spellbook)
+FetchContent_MakeAvailable(vibrant_logs dynamic_array_spellbook dynamic_map_spellbook)
 
 add_library(snaky_strings "${CMAKE_CURRENT_SOURCE_DIR}/src/snaky_strings.c")
 
@@ -21,7 +22,7 @@ endif()
 
 target_include_directories(snaky_strings PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
-target_link_libraries(snaky_strings PUBLIC vibrant_logs dynamic_map_spellbook)
+target_link_libraries(snaky_strings PUBLIC vibrant_logs dynamic_array_spellbook dynamic_map_spellbook)
 
 # testing lib | you can safely remove it:
 add_subdirectory(test)

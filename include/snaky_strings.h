@@ -29,6 +29,9 @@
 #else
 	/**
 	  The default size of char buffers in snaky_strings.
+
+	  To override this value, define SNAKY_CUSTOM_BUF_SIZE
+	  and set it equal to your custom buffer size.
 	*/
 	#define SNAKY_BUF_SIZE 64
 #endif
@@ -50,66 +53,6 @@
   Represents any kind of invalid value within snaky_strings.
 */
 #define SNAKY_INVALID_VALUE -1
-
-/**
-  Represents a map with attribute names as the keys
-  and attribute values as the values.
-*/
-typedef struct snaky_attrib_data
-{
-	/**
-	  The keys of the map are the attribute names in the string.
-	*/
-	char **keys;
-	/**
-	  The values of the map are the attribute values in the string.
-	*/
-	char **values;
-	/**
-	  The current size of the map.
-	*/
-	size_t size;
-	/**
-	  The capacity of the map.
-	*/
-	size_t capacity;
-	/**
-	  Whether or not any allocations failed for this map.
-	*/
-	bool alloc_failure;
-} snaky_attrib_data;
-
-/**
-  The different data types in snaky_strings.
-
-  @note snaky_strings does not use pointers or strings
-  as data types. This means that custom expression
-  functions should always return a numerical, character,
-  or boolean result.
-*/
-typedef enum snaky_data_type
-{
-	/**
-	  Represents the character type.
-	*/
-	SNAKY_CHAR,
-	/**
-	  Represents the boolean type.
-	*/
-	SNAKY_BOOL,
-	/**
-	  Represents the integer type.
-	*/
-	SNAKY_INT,
-	/**
-	  Represents the float type.
-	*/
-	SNAKY_FLOAT,
-	/**
-	  Represents the double type.
-	*/
-	SNAKY_DOUBLE
-} snaky_data_type;
 
 /**
   Contains string data.
@@ -140,6 +83,140 @@ typedef struct snaky_string
 } snaky_string;
 
 /**
+  Represents a map with attribute names as the keys
+  and attribute values as the values.
+*/
+typedef struct snaky_attrib_map
+{
+	/**
+	  The keys of the map are the attribute names in the string.
+	*/
+	char **keys;
+	/**
+	  The values of the map are the attribute values in the string.
+	*/
+	char **values;
+	/**
+	  The current size of the map.
+	*/
+	size_t size;
+	/**
+	  The capacity of the map.
+	*/
+	size_t capacity;
+	/**
+	  Whether or not any allocations failed for this map.
+	*/
+	bool alloc_failure;
+} snaky_attrib_map;
+
+/**
+  The different data types in snaky_strings.
+
+  @note snaky_strings does not use pointers or strings
+  as data types. This means that custom expression
+  functions should always return a numerical, character,
+  or boolean result.
+*/
+typedef enum snaky_data_type
+{
+	/**
+	  Represents the character type.
+	*/
+	SNAKY_CHAR,
+	/**
+	  Represents the boolean type.
+	*/
+	SNAKY_BOOL,
+	/**
+	  Represents the integer type.
+	*/
+	SNAKY_INT,
+	/**
+	  Represents the float type.
+	*/
+	SNAKY_FLOAT,
+	/**
+	  Represents the double type.
+	*/
+	SNAKY_DOUBLE,
+	/**
+	  Represents the array type.
+	*/
+	SNAKY_ARRAY,
+	/**
+	  Represents the object type.
+	*/
+	SNAKY_OBJECT,
+	/**
+	  Represents the string type.
+
+	  @important When parsing attributes,
+	  this becomes the default data type.
+	*/
+	SNAKY_STRING
+} snaky_data_type;
+
+/**
+  Represents a single attribute entry
+  within an attribute entry list.
+
+  @see snaky_attrib_list
+*/
+typedef struct snaky_attrib_entry
+{
+	/**
+	  The name of the attribute.
+	*/
+	snaky_string name;
+	/**
+	  The value of the attribute.
+	*/
+	snaky_string value;
+	/**
+	  The data type of the attribute in string form.
+	*/
+	char data_type_str[7];
+	/**
+	  The data type of the attribute.
+	*/
+	snaky_data_type data_type;
+} snaky_attrib_entry;
+
+/**
+  Represents a list of attributes
+  collected from an attribute string.
+
+  @note Similar to snaky_attrib_maps,
+  snaky_attrib_lists contain info
+  about the attributes in a string. However,
+  entry lists do not contain key:value pairs,
+  and instead all the entries collected
+  are stored in a sequential order. They also
+  contain more information, such as the data
+  type of the attribute.
+*/
+typedef struct snaky_attrib_list
+{
+	/**
+	  The list contains attribute entries.
+	*/
+	snaky_attrib_entry *data;
+	/**
+	  The size of the list.
+	*/
+	size_t size;
+	/**
+	  The capacity of the list.
+	*/
+	size_t capacity;
+	/**
+	  Whether or not any allocations failed for this list.
+	*/
+	bool alloc_failure;
+} snaky_attrib_list;
+
+/**
   Determines how data should be written to a file.
 */
 typedef enum snaky_fwrite_mode
@@ -164,7 +241,7 @@ typedef enum snaky_fwrite_mode
 	  they are written as 2 individual
 	  attribute strings even if they
 	  may be in the same string originally.
-	  This is because snaky_attrib_data maps
+	  This is because snaky_attrib_maps
 	  only know about the entries, and nothing
 	  about the starting and ending positions
 	  in attribute strings. If you want to
@@ -335,6 +412,12 @@ SNAKY_API int snaky_parse_target_attrib_str(const char *str, snaky_string *buffe
   To automatically walk a string and its attributes, pass a pointer into 'out_start_pos'
   and then on the next call use 'out_start_pos' as the 'str' attribute string.
 
+  @important When data types are parsed within a string, it can go 2 routes. The first route
+  is the explicit route: this means the user directly placed a ':DATA_TYPE' part into
+  the name of the attribute. The second route is the implicit route. The function will try
+  to determine the type of the value. Because of this, it will never assume the SNAKY_DOUBLE
+  or SNAKY_CHAR types. It can only ever assume SNAKY_BOOL, SNAKY_INT, or SNAKY_FLOAT.
+
   @see snaky_parse_target_attrib(const char*, char*, size_t, const char*, const char**, snaky_data_type*)
 */
 SNAKY_API int snaky_parse_attrib_buf(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type);
@@ -419,14 +502,48 @@ SNAKY_API size_t snaky_count_attribs(const char *str);
 SNAKY_API bool snaky_is_object(const char *str);
 
 /**
+  Finds the next instance of an attribute within
+  a string and returns a pointer to the start of
+  the attribute name in the original string.
+
+  @return The pointer to the first character in the
+  found attribute name in the original string,
+  or NULL if the attribute is not found.
+*/
+SNAKY_API const char *snaky_get_attrib_pos(const char *str, const char *attrib_name);
+
+/**
   Obtains all the data within an attribute string.
 
   @note This function will not automatically initialize
-  the data map for you.
+  the map for you.
 
   @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_get_attrib_data(const char *str, snaky_attrib_data *data);
+SNAKY_API int snaky_generate_attrib_map(const char *str, snaky_attrib_map *map);
+/**
+  Obtains all the data within an attribute string,
+  and generates a list of the entries.
+
+  @note This function will not automatically initialize
+  the list for you.
+
+  @important When you are done with the attribute list later, use
+  snaky_destroy_attrib_list(...).
+
+  @return 1 on success, 0 on failure.
+
+  @see snaky_destroy_attrib_list(snaky_attrib_list*)
+*/
+SNAKY_API int snaky_generate_attrib_list(const char *str, snaky_attrib_list *list);
+/**
+  Destroys and frees any memory associated with the given
+  attribute list.
+
+  @see snaky_generate_attrib_list(const char*, snaky_attrib_list*)
+  @see snaky_attrib_list
+*/
+SNAKY_API int snaky_destroy_attrib_list(snaky_attrib_list *list);
 
 /**
   Reads a character attribute value and obtains the actual
@@ -527,6 +644,19 @@ SNAKY_API void snaky_parse_value(const char *origin, const char *str, snaky_data
   @see snaky_parse_target_attrib(const char*, char*, size_t, const char*, const char**)
 */
 SNAKY_API void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, const char **out_start_pos, int *out_success);
+/**
+  Parses a data type into a string.
+
+  For example, if SNAKY_CHAR is used,
+  the buffer given will be equal to
+  "char." This also means the maximum
+  required buffer size is only 7, since
+  "double" is the longest possible data
+  type parsed.
+
+  @return 1 on success, 0 on failure.
+*/
+SNAKY_API int snaky_parse_data_type(snaky_data_type data_type, char *buffer, size_t buffer_size);
 
 /**
   Determines if a file exists.
@@ -556,16 +686,16 @@ SNAKY_API int snaky_read_file_buf(const char *file_path, char *buffer, size_t bu
 SNAKY_API int snaky_read_file_str(const char *file_path, snaky_string *str, snaky_fwrite_mode mode);
 /**
   Reads a file's contents and inserts it all into
-  a snaky_attrib_data map.
+  a snaky_attrib_map.
 
   @note This function will not automatically initialize
-  the data map for you.
+  the map for you.
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_attrib_data
+  @see snaky_attrib_maps
 */
-SNAKY_API int snaky_read_file_data(const char *file_path, snaky_attrib_data *data, snaky_fwrite_mode mode);
+SNAKY_API int snaky_read_file_map(const char *file_path, snaky_attrib_map *map, snaky_fwrite_mode mode);
 /**
   Opens a file and writes an attribute list to it.
 
@@ -580,7 +710,7 @@ SNAKY_API int snaky_read_file_data(const char *file_path, snaky_attrib_data *dat
 
   @see SNAKY_FWRITE_TEXT
 */
-SNAKY_API int snaky_write_file_data(const char *file_path, snaky_attrib_data *data, snaky_fwrite_mode mode);
+SNAKY_API int snaky_write_file_map(const char *file_path, snaky_attrib_map *map, snaky_fwrite_mode mode);
 /**
   Opens a file and writes attribute strings to it.
 

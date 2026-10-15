@@ -4,11 +4,9 @@
 #include <ctype.h>
 #include <string.h>
 #include "vibrant_logs.h"
+#include "dynamic_array_spellbook.h"
 #include "dynamic_map_spellbook.h"
 #include "snaky_strings.h"
-
-#define GROUP_OPENING '{'
-#define GROUP_CLOSING '}'
 
 // number of bytes a snaky_string will increase by as an attrib string is parsed
 #define STR_CAPACITY_INCREASE 50
@@ -160,6 +158,10 @@ int snaky_create_str(snaky_string *str, char *data)
 	if(!str || !data)
 		return 0;
 
+	// clear out old memory if necessary
+	if(str->data)
+		snaky_free_str(str);
+
 	str->data = strdup(data);
 	if(!str->data)
 	{
@@ -176,6 +178,10 @@ int snaky_prepare_str(snaky_string *str, size_t bytes)
 {
 	if(!str)
 		return 0;
+
+	// clear out old memory if necessary
+	if(str->data)
+		snaky_free_str(str);
 
 	str->data = calloc(bytes, sizeof(char));
 	if(!str->data)
@@ -248,16 +254,15 @@ int snaky_realloc_str(snaky_string *str, size_t bytes)
 	return 1;
 }
 
-// start should point to the first group indicator in the group string
-static const char *find_end_of_group(const char *start)
+static const char *find_end_of_group(const char *start, char open, char close)
 {
 	size_t depth = 0;
 
 	for(const char *p = start; *p; ++p)
 	{
-		if(*p == GROUP_OPENING)
+		if(*p == open)
 			depth++;
-		else if(*p == GROUP_CLOSING)
+		else if(*p == close)
 		{
 			depth--;
 
@@ -270,74 +275,121 @@ static const char *find_end_of_group(const char *start)
 
 	return NULL;
 }
-
-// skip all whitespace in a string until a valid char is reached
-static void skip_whitespace(const char **str)
+static const char *find_end_of_object(const char *start)
 {
-	while(**str && isspace(**str))
-		(*str)++;
+	return find_end_of_group(start, '{', '}');
+}
+static const char *find_end_of_array(const char *start)
+{
+	return find_end_of_group(start, '[', ']');
+}
+static const char *find_end_of_attribs(const char *start)
+{
+	return find_end_of_group(start, '<', '>');
 }
 
-// 'start' should point to the ':' character in the string
-// 'out_jump' is how long the resolved data type string was (example: 'char' results in 'out_jump' being 4)
-// return -1 on complete failure, 0 on successfull call but no data type resolved, 1 on complete success
+// skip all whitespace in a string until a valid char is reached
+static void skip_whitespace(const char **str, size_t *out_num_spaces)
+{
+	if(out_num_spaces)
+		*out_num_spaces = 0;
+	while(**str && isspace(**str))
+	{
+		if(out_num_spaces)
+			*out_num_spaces += 1;
+		(*str)++;
+	}
+}
+
+/*
+   - 'start' should point to the character directly after the ':' character
+   - 'out_jump' is how many characters are in between the last char in the attrib name and the '=' sign
+   - return -1 on complete failure, 0 on successful call but no data type resolved, 1 on complete success
+*/
 static int resolve_data_type(const char *start, snaky_data_type *out_data_type, size_t *out_jump)
 {
 	if(!out_data_type)
 		return 0;
-
 	// default to invalid value
 	*out_data_type = SNAKY_INVALID_VALUE;
+
+	const char *origin = start;
+
+	size_t num_spaces = 0;
+
+	// get number of spaces skipped:
+	skip_whitespace(&start, &num_spaces);
+	// add that to jump as well
 	if(out_jump)
-		*out_jump = 0;
-
-	if(*start != ':')
-		return 0;
-
-	// skip the ':'
-	start++;
-
-	// skip all whitespace after the ':'
-	skip_whitespace(&start);
+		*out_jump += num_spaces;
 
 	// now find which data type the user provided
 	if(strncmp(start, "char", 4) == 0)
 	{
 		*out_data_type = SNAKY_CHAR;
 		if(out_jump)
-			*out_jump = 4;
+			*out_jump += 4;
 	}
 	else if(strncmp(start, "bool", 4) == 0)
 	{
 		*out_data_type = SNAKY_BOOL;
 		if(out_jump)
-			*out_jump = 4;
+			*out_jump += 4;
 	}
 	else if(strncmp(start, "int", 3) == 0)
 	{
 		*out_data_type = SNAKY_INT;
 		if(out_jump)
-			*out_jump = 3;
+			*out_jump += 3;
 	}
 	else if(strncmp(start, "float", 5) == 0)
 	{
 		*out_data_type = SNAKY_FLOAT;
 		if(out_jump)
-			*out_jump = 5;
+			*out_jump += 5;
 	}
 	else if(strncmp(start, "double", 6) == 0)
 	{
 		*out_data_type = SNAKY_DOUBLE;
 		if(out_jump)
-			*out_jump = 6;
+			*out_jump += 6;
+	}
+	else if(strncmp(start, "array", 5) == 0)
+	{
+		*out_data_type = SNAKY_ARRAY;
+		if(out_jump)
+			*out_jump += 5;
+	}
+	else if(strncmp(start, "object", 6) == 0)
+	{
+		*out_data_type = SNAKY_OBJECT;
+		if(out_jump)
+			*out_jump += 6;
+	}
+	else if(strncmp(start, "string", 6) == 0)
+	{
+		*out_data_type = SNAKY_STRING;
+		if(out_jump)
+			*out_jump += 6;
 	}
 	else
 	{
-		vl_log(VL_ERROR, "Unknown data type: '%s'!\n", *start);
-		return -1;
+		// see if a '[' or '{' char is found after the '=' sign
+		while(*start && *start != '=')
+		{
+			start++;
+			if(out_jump)
+				*out_jump += 1;
+		}
+
+		vl_log(VL_WARNING, "Unknown data type in string: '%s'! Defaulting to SNAKY_STRING!\n", origin);
+
+		// default to the string type when no type is given
+		*out_data_type = SNAKY_STRING;
+		return 1;
 	}
 
-	return 1;
+	return -1;
 }
 
 static void return_start_pos(const char *attribs_start, const char **out_start_pos)
@@ -352,111 +404,23 @@ static void return_start_pos(const char *attribs_start, const char **out_start_p
 			*out_start_pos = NULL;
 		else
 		{
-			skip_whitespace(&attribs_start);
+			skip_whitespace(&attribs_start, NULL);
 			*out_start_pos = attribs_start;
 		}
 	}
 }
 
-// if using a snaky_string, 'sstr' won't be NULL, but if using a normal stack-allocated buffer, it will be NULL
-static int parse_target_attrib(const char *attribs_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *attrib_name, size_t attrib_len, const char **out_start_pos, snaky_data_type *out_data_type)
+static int parse_value(const char *value_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_start_pos, bool break_on_comma, const char *(*end_pos_fn)(const char*), const char *origin)
 {
-	size_t jump = 0;
-	if(resolve_data_type(attribs_start, out_data_type, &jump) == -1)
-		return 0;
+	// determine end of the value in the string
+	const char *end_pos = end_pos_fn(origin);
 
-	attribs_start += jump;
-
-	skip_whitespace(&attribs_start);
-
-	// go to where '=' should be
-	attribs_start += attrib_len;
-	skip_whitespace(&attribs_start);
-
-	if(!*attribs_start || *attribs_start != '=')
-	{
-		vl_log(VL_ERROR, "Expected '=' after attribute: '%s'!\n", attrib_name);
-		return 0;
-	}
-
-	// go to the character after the '='
-	attribs_start++;
-	skip_whitespace(&attribs_start);
-
-	if(!*attribs_start)
-	{
-		vl_log(VL_ERROR, "Unexpected termination of attribute string at '%c'!\n", *(attribs_start - 1));
-		return 0;
-	}
-
-	// if the start of the attribute is an opening of another attribute string, error out
-	if(*attribs_start == '<')
-	{
-		vl_log(VL_ERROR, "Nested attribute strings must be wrapped around '{}'!\n");
-		return 0;
-	}
-
-	// determine if a nested attribute or string is given
-	if(*attribs_start == GROUP_OPENING)
-	{
-		const char *start_of_group = attribs_start;
-
-		// copy everything in the string exactly as is
-		const char *end_of_group = find_end_of_group(attribs_start);
-		if(!end_of_group)
-		{
-			vl_log(VL_ERROR, "Group was never closed in string: '%s'!\n", start_of_group);
-			return 0;
-		}
-
-		size_t i = 0;
-		while(*attribs_start && attribs_start != end_of_group)
-		{
-			// determine what type of buffer is being used
-			if(sbuffer)
-			{
-				if(i + 1 >= sbuffer->size)
-				{
-					if(!snaky_realloc_str(sbuffer, sbuffer->size + STR_CAPACITY_INCREASE))
-						return 0;
-				}
-			}
-			else
-				if(i + 1 >= buffer_size)
-					break;
-
-			char next = *attribs_start++;
-			if(isspace(next))
-				continue;
-
-			if(buffer)
-				buffer[i++] = next;
-			else if(sbuffer)
-				sbuffer->data[i++] = next;
-		}
-
-		if(buffer && buffer_size > 0)
-		{
-			if(buffer[i - 1] == '\n')
-				buffer[i - 1] = '\0';
-			buffer[i] = '\0';
-		}
-		else if(sbuffer)
-		{
-			if(sbuffer->data[i - 1] == '\n')
-				sbuffer->data[i - 1] = '\0';
-			sbuffer->data[i] = '\0';
-		}
-
-		return_start_pos(attribs_start, out_start_pos);
-
-		return 1;
-	}
-
-	// if not a nested string, copy the attrib value normally
 	size_t i = 0;
-	while(*attribs_start && *attribs_start != '>' && *attribs_start != ',')
+	while(*value_start && value_start != end_pos)
 	{
+		if(break_on_comma && *value_start == ',')
+			break;
+
 		if(sbuffer)
 		{
 			if(i + 1 >= sbuffer->size)
@@ -469,33 +433,75 @@ static int parse_target_attrib(const char *attribs_start, snaky_string *sbuffer,
 			if(i + 1 >= buffer_size)
 				break;
 
-		char next = *attribs_start++;
-		if(isspace(next))
-			continue;
+		char next = *value_start++;
+		/*if(isspace(next))
+			continue;*/
 
-		if(buffer)
-			buffer[i++] = next;
-		else if(sbuffer)
+		if(sbuffer)
 			sbuffer->data[i++] = next;
+		else if(buffer)
+			buffer[i++] = next;
 	}
 
-	// remove '\n' from buffer
-	if(buffer && buffer_size > 0)
-	{
-		if(buffer[i - 1] == '\n')
-			buffer[i - 1] = '\0';
-		buffer[i] = '\0';
-	}
-	else if(sbuffer)
+	if(sbuffer)
 	{
 		if(sbuffer->data[i - 1] == '\n')
 			sbuffer->data[i - 1] = '\0';
 		sbuffer->data[i] = '\0';
 	}
+	else if(buffer && buffer_size > 0)
+	{
+		if(buffer[i - 1] == '\n')
+			buffer[i - 1] = '\0';
+		buffer[i] = '\0';
+	}
 
-	return_start_pos(attribs_start, out_start_pos);
+	return_start_pos(value_start, out_start_pos);
 
 	return 1;
+}
+
+// if using a snaky_string, 'sbuffer' won't be NULL, but if using a normal stack-allocated buffer, it will be NULL
+static int parse_target_attrib(const char *attribs_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *attrib_name, size_t attrib_len, const char **out_start_pos, snaky_data_type *out_data_type)
+{
+	const char *origin = attribs_start;
+
+	skip_whitespace(&attribs_start, NULL);
+
+	while(*attribs_start && *attribs_start != '=')
+		attribs_start++;
+
+	if(!*attribs_start)
+	{
+		vl_log(VL_ERROR, "Expected '=' after attribute: '%s'!\n", attrib_name);
+		return 0;
+	}
+
+	// go to the character after the '='
+	attribs_start++;
+	skip_whitespace(&attribs_start, NULL);
+
+	if(!*attribs_start)
+	{
+		vl_log(VL_ERROR, "Unexpected termination of attribute string: '%s'!\n", origin);
+		return 0;
+	}
+
+	// if the start of the attribute is an opening of another attribute string, error out
+	if(*attribs_start == '<')
+	{
+		vl_log(VL_ERROR, "Nested attribute strings must be wrapped around '{}'!\n");
+		return 0;
+	}
+
+	// determine if a nested attribute or string is given
+	if(*attribs_start == '{')
+		return parse_value(attribs_start, sbuffer, buffer, buffer_size, out_start_pos, false, find_end_of_object, origin);
+	else if(*attribs_start == '[')
+		return parse_value(attribs_start, sbuffer, buffer, buffer_size, out_start_pos, false, find_end_of_array, origin);
+
+	// if not a nested string, copy the attrib value normally
+	return parse_value(attribs_start, sbuffer, buffer, buffer_size, out_start_pos, true, find_end_of_attribs, origin);
 }
 static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type)
 {
@@ -528,6 +534,96 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 	}
 	resolved_attrib_len = strlen(resolved_attrib_name);
 
+	// see if user searching for a value within an array (requires '[N]' in 'attrib_name')
+	char index_value[SNAKY_BUF_SIZE + 1] = {0};
+	for(const char *p = attrib_name; *p; ++p)
+	{
+		if(*p == '[')
+		{
+			// skip the '['
+			p++;
+
+			size_t i = 0;
+			while(*p && *p != ']')
+			{
+				if(i + 1 >= sizeof(index_value))
+					break;
+				index_value[i++] = *p++;
+			}
+			index_value[i] = '\0';
+			break;
+		}
+	}
+
+	// if index_value length exceeds 0, user provided an index
+	size_t index_value_len = strlen(index_value);
+	if(index_value_len > 0)
+	{
+		// now parse the index value
+		int s = 0;
+		int index = snaky_parse_int(str, index_value, &s);
+		if(s == 0)
+		{
+			vl_log(VL_ERROR, "Failed to parse target index: '%s'!\n", attrib_name);
+			return 0;
+		}
+
+		// validate index
+		if(index < 0)
+		{
+			vl_log(VL_ERROR, "Cannot have a negative index: '%s'!\n", attrib_name);
+			return 0;
+		}
+
+		// because the attrib name contains a '[N]' part, the actual length of the array's name in the string does not include these characters
+		size_t actual_array_name_len = resolved_attrib_len - 2 - index_value_len;
+
+		// now find the array in the attribute string, go to the specific index, and parse the value there
+		for(const char *p = str; *p && *p != '>'; ++p)
+		{
+			if(strncmp(p, resolved_attrib_name, actual_array_name_len) == 0)
+			{
+				const char *array_start = p;
+
+				// jump to the character right after the '['
+				while(*p && *p != '[')
+					p++;
+				if(!*p)
+				{
+					vl_log(VL_ERROR, "Unexpected termination of string: '%s'!\n", str);
+					return 0;
+				}
+
+				const char *start_of_array = p;
+
+				// when the array is found, go to the specific index in the array
+				size_t curr_index = 0;
+				while(*p && *p != ']')
+				{
+					// see if a ',' is found
+					if(*p == ',')
+						curr_index++;
+
+					// go to next valid character
+					p++;
+					skip_whitespace(&p, NULL);
+
+					// when the current index matches the target index:
+					if(curr_index == index)
+						return parse_value(p, sbuffer, buffer, buffer_size, out_start_pos, false, find_end_of_array, start_of_array);
+				}
+
+				if(curr_index < index)
+				{
+					vl_log(VL_ERROR, "Index %zu is out of bounds for array '%s'!\n", index, array_start);
+					return 0;
+				}
+			}
+		}
+
+		return 0;
+	}
+
 	// see if resolved attrib name is invalid (starts with number of symbol)
 	if(!isalpha(*resolved_attrib_name))
 	{
@@ -541,35 +637,29 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 		char c = *p;
 
 		// if the first char is a group indicator, skip the string entirely (unless user is searching for nested attribute )
-		if(*p == GROUP_OPENING)
+		if(*p == '{')
 		{
-			const char *start_of_group = p;
-
-			const char *end_of_group = find_end_of_group(p);
-			if(!end_of_group)
-			{
-				vl_log(VL_ERROR, "Group was never closed in string: '%s'!\n", start_of_group);
-				return 0;
-			}
-
 			// if user included a '.' to find a nested attribute, search for that attribute now:
 			if(last_nested_attrib_pos > 0)
 			{
-				// search the entire current string region:
-				while(p != end_of_group)
+				// search the rest of the string:
+				while(*p)
 				{
 					const char *attribs_start = p + 1;
 
-					skip_whitespace(&attribs_start);
+					skip_whitespace(&attribs_start, NULL);
 
 					if(!*attribs_start)
 					{
-						vl_log(VL_ERROR, "Unexpected termination of attribute string at '%c'!\n", *(attribs_start - 1));
+						vl_log(VL_ERROR, "Unexpected termination of attribute string: '%s'!\n", str);
 						return 0;
 					}
 
 					if(strncmp(attribs_start, resolved_attrib_name, resolved_attrib_len) == 0)
+					{
+						resolve_data_type(attribs_start, out_data_type, NULL);
 						return parse_target_attrib(attribs_start, sbuffer, buffer, buffer_size, resolved_attrib_name, resolved_attrib_len, out_start_pos, out_data_type);
+					}
 
 					++p;
 				}
@@ -577,7 +667,7 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 
 			if(!*p)
 			{
-				vl_log(VL_ERROR, "Unexpected termination of string at '%c'!\n", *(p - 1));
+				vl_log(VL_ERROR, "Unexpected termination of string: '%s'!\n", str);
 				return 0;
 			}
 
@@ -593,11 +683,11 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 			// compare the attribute with the target attribute
 			const char *attribs_start = p + 1;
 
-			skip_whitespace(&attribs_start);
+			skip_whitespace(&attribs_start, NULL);
 
 			if(!*attribs_start)
 			{
-				vl_log(VL_ERROR, "Unexpected termination of attribute string at '%c'!\n", *(attribs_start - 1));
+				vl_log(VL_ERROR, "Unexpected termination of attribute string: '%s'!\n", str);
 				return 0;
 			}
 
@@ -607,18 +697,18 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 			continue;
 		}
 
-		// parse all subsequent attribute
+		// parse all subsequent attributes
 		if(c == ',' && in_top_most_level)
 		{
 			// same logic as above
 			const char *attribs_start = p + 1;
 
 			// skip whitespace
-			skip_whitespace(&attribs_start);
+			skip_whitespace(&attribs_start, NULL);
 
 			if(!*attribs_start)
 			{
-				vl_log(VL_ERROR, "Unexpected termination of attribute string at '%c'!\n", *(attribs_start - 1));
+				vl_log(VL_ERROR, "Unexpected termination of attribute string: '%s'!\n", str);
 				return 0;
 			}
 
@@ -642,10 +732,13 @@ int snaky_parse_target_attrib_str(const char *str, snaky_string *buffer, const c
 
 static int parse_attrib(const char *attribs_start, snaky_string *name_str, snaky_string *value_str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
 {
-	skip_whitespace(&attribs_start);
+	const char *origin = attribs_start;
+
+	skip_whitespace(&attribs_start, NULL);
 
 	// 'attribs_start' points to the first char in the attrib name
 	size_t i = 0;
+	bool data_type_resolved = false;
 	while(*attribs_start && *attribs_start != '=')
 	{
 		if(name_str)
@@ -666,6 +759,7 @@ static int parse_attrib(const char *attribs_start, snaky_string *name_str, snaky
 		}
 
 		char next = *attribs_start++;
+		// when parsing names, spaces don't matter
 		if(isspace(next))
 			continue;
 
@@ -673,9 +767,9 @@ static int parse_attrib(const char *attribs_start, snaky_string *name_str, snaky
 		if(next == ':')
 		{
 			size_t jump = 0;
-			if(resolve_data_type(attribs_start, out_data_type, &jump) == -1)
-				return 0;
+			resolve_data_type(attribs_start, out_data_type, &jump);
 			attribs_start += jump;
+			data_type_resolved = true;
 			continue;
 		}
 
@@ -704,7 +798,7 @@ static int parse_attrib(const char *attribs_start, snaky_string *name_str, snaky
 	attribs_start++;
 
 	// skip all whitespace:
-	skip_whitespace(&attribs_start);
+	skip_whitespace(&attribs_start, NULL);
 
 	// if the start of the attribute is an opening of another attribute string, error out
 	if(*attribs_start == '<')
@@ -715,60 +809,21 @@ static int parse_attrib(const char *attribs_start, snaky_string *name_str, snaky
 
 	if(!*attribs_start)
 	{
-		vl_log(VL_ERROR, "Unexpected termination of attribute string at '%c'!\n", *(attribs_start - 1));
+		vl_log(VL_ERROR, "Unexpected termination of attribute string: '%s'!\n", origin);
 		return 0;
 	}
 
-	// if inside a string, keep adding values until the matching group indicator is found
-	if(*attribs_start == GROUP_OPENING)
+	if(*attribs_start == '[')
 	{
-		const char *start_of_group = attribs_start;
-
-		const char *end_of_group = find_end_of_group(attribs_start);
-		if(!end_of_group)
-		{
-			vl_log(VL_ERROR, "Group was never closed in string: '%s'!\n", start_of_group);
-			return 0;
-		}
-
-		// copy everything in the string exactly as is
-		i = 0;
-		while(*attribs_start && attribs_start != end_of_group)
-		{
-			if(value_str)
-			{
-				if(i + 1 >= value_str->size)
-				{
-					if(!snaky_realloc_str(value_str, value_str->size + STR_CAPACITY_INCREASE))
-						return 0;
-				}
-			}
-			else if(value_buffer)
-			{
-				if(i + 1 >= value_buffer_size)
-				{
-					vl_log(VL_WARNING, "Value buffer isn't large enough: size = %zu!\n", value_buffer_size);
-				}
-			}
-
-			char next = *attribs_start++;
-			if(isspace(next))
-				continue;
-
-			if(value_buffer)
-				value_buffer[i++] = next;
-			else if(value_str)
-				value_str->data[i++] = next;
-		}
-
-		if(value_buffer)
-			value_buffer[i] = '\0';
-		else if(value_str)
-			value_str->data[i] = '\0';
-
-		return_start_pos(attribs_start, out_start_pos);
-
-		return 1;
+		if(out_data_type)
+			*out_data_type = SNAKY_ARRAY;
+		return parse_value(attribs_start, value_str, value_buffer, value_buffer_size, out_start_pos, false, find_end_of_array, origin);
+	}
+	else if(*attribs_start == '{')
+	{
+		if(out_data_type)
+			*out_data_type = SNAKY_OBJECT;
+		return parse_value(attribs_start, value_str, value_buffer, value_buffer_size, out_start_pos, false, find_end_of_object, origin);
 	}
 
 	// if not a nested string, copy the attrib value normally
@@ -792,8 +847,8 @@ static int parse_attrib(const char *attribs_start, snaky_string *name_str, snaky
 		}
 
 		char next = *attribs_start++;
-		if(isspace(next))
-			continue;
+		/*if(isspace(next))
+			continue;*/
 
 		if(value_buffer)
 			value_buffer[i++] = next;
@@ -807,6 +862,10 @@ static int parse_attrib(const char *attribs_start, snaky_string *name_str, snaky
 		value_str->data[i] = '\0';
 
 	return_start_pos(attribs_start, out_start_pos);
+
+	// default to string here
+	if(!data_type_resolved && out_data_type)
+		*out_data_type = SNAKY_STRING;
 
 	return 1;
 }
@@ -822,19 +881,23 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		// get char
 		char c = *p;
 
-		// if the first char is a group indicator, skip the string entirely
-		if(*p == GROUP_OPENING)
-		{
-			const char *start_of_group = p;
+		// see if the first char in the string is just a letter
+		if(isalpha(c))
+			return parse_attrib(p, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_start_pos, out_data_type);
 
-			const char *end_of_group = find_end_of_group(p);
-			if(!end_of_group)
+		// if the first char is a group indicator, skip the string entirely
+		if(c == '{')
+		{
+			const char *start_of_object = p;
+
+			const char *end_of_object = find_end_of_object(p);
+			if(!end_of_object)
 			{
-				vl_log(VL_ERROR, "Group was never closed in string: '%s'!\n", start_of_group);
+				vl_log(VL_ERROR, "Object was never closed in string: '%s'!\n", start_of_object);
 				return 0;
 			}
 
-			while(*p && p != end_of_group)
+			while(*p && p != end_of_object)
 				++p;
 
 			continue;
@@ -847,11 +910,11 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 
 			const char *attribs_start = p + 1;
 
-			skip_whitespace(&attribs_start);
+			skip_whitespace(&attribs_start, NULL);
 
 			if(!*attribs_start)
 			{
-				vl_log(VL_ERROR, "Unexpected termination of attribute string at '%c'!\n", *(attribs_start - 1));
+				vl_log(VL_ERROR, "Unexpected termination of attribute string: '%s'!\n", str);
 				return 0;
 			}
 
@@ -863,11 +926,11 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		{
 			const char *attribs_start = p + 1;
 
-			skip_whitespace(&attribs_start);
+			skip_whitespace(&attribs_start, NULL);
 
 			if(*attribs_start)
 			{
-				vl_log(VL_ERROR, "Unexpected termination of attribute string at '%c'!\n", *(attribs_start - 1));
+				vl_log(VL_ERROR, "Unexpected termination of attribute string: '%s'!\n", str);
 				return 0;
 			}
 
@@ -1065,17 +1128,17 @@ int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name,
 		const char *origin = buf;
 		while(*buf && *buf != '>')
 		{
-			if(*buf == GROUP_OPENING)
+			if(*buf == '{')
 			{
-				const char *end_of_group = find_end_of_group(buf);
-				if(!end_of_group)
+				const char *end_of_object = find_end_of_object(buf);
+				if(!end_of_object)
 				{
-					vl_log(VL_ERROR, "Group was never closed in string: '%s'!\n", buf);
+					vl_log(VL_ERROR, "Object was never closed in string: '%s'!\n", buf);
 					return 0;
 				}
 
 				// jump to end of group
-				buf = (char*) end_of_group;
+				buf = (char*) end_of_object;
 				buf++;
 				break;
 			}
@@ -1198,17 +1261,17 @@ int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char 
 		while(*buf && *buf != '>')
 		{
 			// see if an object should be skipped
-			if(*buf == GROUP_OPENING)
+			if(*buf == '{')
 			{
-				const char *end_of_group = find_end_of_group(buf);
-				if(!end_of_group)
+				const char *end_of_object = find_end_of_object(buf);
+				if(!end_of_object)
 				{
-					vl_log(VL_ERROR, "Group was never closed in string: '%s'!\n", buf);
+					vl_log(VL_ERROR, "Object was never closed in string: '%s'!\n", buf);
 					return 0;
 				}
 				
 				// jump to end of group
-				buf = (char*) end_of_group;
+				buf = (char*) end_of_object;
 				buf++;
 				break;
 			}
@@ -1269,25 +1332,25 @@ int snaky_set_attribs_buf(char *str, size_t buffer_size, const char *attribs)
 		return 0;
 
 	// because 'attribs' should be its own attribute string, get the attribute data from it
-	snaky_attrib_data attribs_data = {0};
-	if(snaky_get_attrib_data(attribs, &attribs_data))
+	snaky_attrib_map map = {0};
+	if(snaky_generate_attrib_map(attribs, &map))
 	{
 		// go through the map
-		for(size_t i = 0; i < attribs_data.size; ++i)
+		for(size_t i = 0; i < map.size; ++i)
 		{
 			// get the attrib name and new value
-			const char *name = attribs_data.keys[i];
-			const char *val = attribs_data.values[i];
+			const char *name = map.keys[i];
+			const char *val = map.values[i];
 
 			// set it
 			if(!snaky_set_attrib_buf(str, buffer_size, name, val))
 			{
-				dynmaps_free_strkeyval(&attribs_data);
+				dynmaps_free_strkeyval(&map);
 				return 0;
 			}
 		}
 
-		dynmaps_free_strkeyval(&attribs_data);
+		dynmaps_free_strkeyval(&map);
 		return 1;
 	}
 
@@ -1300,25 +1363,25 @@ int snaky_set_attribs_str(snaky_string *str, const char *attribs)
 		return 0;
 
 	// get attrib data from 'attribs'
-	snaky_attrib_data attribs_data = {0};
-	if(snaky_get_attrib_data(attribs, &attribs_data))
+	snaky_attrib_map map = {0};
+	if(snaky_generate_attrib_map(attribs, &map))
 	{
 		// go through the map
-		for(size_t i = 0; i < attribs_data.size; ++i)
+		for(size_t i = 0; i < map.size; ++i)
 		{
 			// get attrib entry
-			const char *name = attribs_data.keys[i];
-			const char *value = attribs_data.values[i];
+			const char *name = map.keys[i];
+			const char *value = map.values[i];
 
 			// set it
 			if(!snaky_set_attrib_str(str, name, value))
 			{
-				dynmaps_free_strkeyval(&attribs_data);
+				dynmaps_free_strkeyval(&map);
 				return 0;
 			}
 		}
 
-		dynmaps_free_strkeyval(&attribs_data);
+		dynmaps_free_strkeyval(&map);
 		return 1;
 	}
 
@@ -1352,9 +1415,26 @@ bool snaky_is_object(const char *str)
 	return *str && *str == '{';
 }
 
-int snaky_get_attrib_data(const char *str, snaky_attrib_data *data)
+const char *snaky_get_attrib_pos(const char *str, const char *attrib_name)
 {
-	if(!str || strlen(str) == 0 || !data || !data->keys || !data->values)
+	size_t attrib_name_len = attrib_name ? strlen(attrib_name) : 0;
+
+	if(!str || !attrib_name || strlen(str) == 0 || attrib_name_len == 0)
+		return NULL;
+
+	while(*str)
+	{
+		if(strncmp(str, attrib_name, attrib_name_len) == 0)
+			return str;
+		str++;
+	}
+
+	return NULL;
+}
+
+int snaky_generate_attrib_map(const char *str, snaky_attrib_map *map)
+{
+	if(!str || strlen(str) == 0 || !map || !map->keys || !map->values)
 		return 0;
 
 	snaky_string name = {0};
@@ -1371,8 +1451,8 @@ int snaky_get_attrib_data(const char *str, snaky_attrib_data *data)
 	const char *start_pos = str;
 	while(start_pos && snaky_parse_attrib_str(start_pos, &name, &value, &start_pos, NULL))
 	{
-		dynmaps_set_strkeyval(data, name.data, value.data);
-		if(data->alloc_failure)
+		dynmaps_set_strkeyval(map, name.data, value.data);
+		if(map->alloc_failure)
 		{
 			snaky_free_str(&name);
 			snaky_free_str(&value);
@@ -1382,11 +1462,99 @@ int snaky_get_attrib_data(const char *str, snaky_attrib_data *data)
 	snaky_free_str(&name);
 	snaky_free_str(&value);
 
-	if(data->size == 0)
+	if(map->size == 0)
 	{
-		vl_log(VL_WARNING, "No attribute data found in string: '%s'!\n", str);
+		vl_log(VL_WARNING, "No attribute entries found in string: '%s'!\n", str);
 		return 0;
 	}
+
+	return 1;
+}
+int snaky_generate_attrib_list(const char *str, snaky_attrib_list *list)
+{
+	if(!str || strlen(str) == 0 || !list || !list->data)
+		return 0;
+
+	snaky_string name = {0};
+	if(!snaky_prepare_str(&name, SNAKY_BUF_SIZE + 1))
+		return 0;
+
+	snaky_string value = {0};
+	if(!snaky_prepare_str(&value, SNAKY_BUF_SIZE + 1))
+	{
+		snaky_free_str(&name);
+		return 0;
+	}
+
+	const char *start_pos = str;
+	snaky_data_type data_type = SNAKY_INVALID_VALUE;
+	while(start_pos && snaky_parse_attrib_str(start_pos, &name, &value, &start_pos, &data_type))
+	{
+		snaky_attrib_entry entry = {0};
+		if(!snaky_prepare_str(&entry.name, SNAKY_BUF_SIZE + 1))
+		{
+			snaky_free_str(&name);
+			snaky_free_str(&value);
+			return 0;
+		}
+		if(!snaky_prepare_str(&entry.value, SNAKY_BUF_SIZE + 1))
+		{
+			snaky_free_str(&name);
+			snaky_free_str(&value);
+			snaky_free_str(&entry.name);
+			return 0;
+		}
+
+		if(!snaky_strcpy(&entry.name, name.data))
+		{
+			snaky_free_str(&name);
+			snaky_free_str(&value);
+			return 0;
+		}
+		if(!snaky_strcpy(&entry.value, value.data))
+		{
+			snaky_free_str(&name);
+			snaky_free_str(&value);
+			return 0;
+		}
+
+		entry.data_type = data_type;
+		snaky_parse_data_type(data_type, entry.data_type_str, sizeof(entry.data_type_str));
+
+		dynas_add(list, entry);
+		if(list->alloc_failure)
+		{
+			snaky_free_str(&name);
+			snaky_free_str(&value);
+			return 0;
+		}
+	}
+	snaky_free_str(&name);
+	snaky_free_str(&value);
+
+	if(list->size == 0)
+	{
+		vl_log(VL_WARNING, "No attribute entries found in string: '%s'!\n", str);
+		return 0;
+	}
+
+	return 1;
+}
+int snaky_destroy_attrib_list(snaky_attrib_list *list)
+{
+	if(!list || !list->data)
+		return 0;
+
+	for(size_t i = 0; i < list->size; ++i)
+	{
+		// get entry
+		snaky_attrib_entry *entry = &list->data[i];
+		snaky_free_str(&entry->name);
+		snaky_free_str(&entry->value);
+		entry->data_type = SNAKY_INVALID_VALUE;
+	}
+
+	dynas_free(list);
 
 	return 1;
 }
@@ -1416,13 +1584,13 @@ bool snaky_parse_bool(const char *str, int *out_success)
 	if(!str || strlen(str) == 0)
 		return false;
 
-	if(strcmp(str, "TRUE") == 0 || strcmp(str, "ON") == 0)
+	if(strncmp(str, "TRUE", 4) == 0 || strncmp(str, "ON", 2) == 0)
 	{
 		if(out_success)
 			*out_success = 1;
 		return true;
 	}
-	else if(strcmp(str, "FALSE") == 0 || strcmp(str, "OFF") == 0)
+	else if(strncmp(str, "FALSE", 5) == 0 || strncmp(str, "OFF", 3) == 0)
 	{
 		if(out_success)
 			*out_success = 1;
@@ -1434,12 +1602,12 @@ bool snaky_parse_bool(const char *str, int *out_success)
 
 static char peek_next_char(const char **str)
 {
-	skip_whitespace(str);
+	skip_whitespace(str, NULL);
 	return **str;
 }
 static char get_next_char(const char **str)
 {
-	skip_whitespace(str);
+	skip_whitespace(str, NULL);
 	return *(*str)++;
 }
 static float parse_term(const char*, const char**, int*);
@@ -1852,6 +2020,45 @@ void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, s
 	if(*out_success == 0)
 		vl_log(VL_ERROR, "Failed to parse target attrib value: string: '%s', attribute name: '%s'!\n", str, attrib_name);
 }
+int snaky_parse_data_type(snaky_data_type data_type, char *buffer, size_t buffer_size)
+{
+	if(!buffer || buffer_size == 0)
+		return 0;
+
+	switch(data_type)
+	{
+		case SNAKY_CHAR:
+			snprintf(buffer, buffer_size, "char");
+			break;
+		case SNAKY_BOOL:
+			snprintf(buffer, buffer_size, "bool");
+			break;
+		case SNAKY_INT:
+			snprintf(buffer, buffer_size, "int");
+			break;
+		case SNAKY_FLOAT:
+			snprintf(buffer, buffer_size, "float");
+			break;
+		case SNAKY_DOUBLE:
+			snprintf(buffer, buffer_size, "double");
+			break;
+		case SNAKY_ARRAY:
+			snprintf(buffer, buffer_size, "array");
+			break;
+		case SNAKY_OBJECT:
+			snprintf(buffer, buffer_size, "object");
+			break;
+		case SNAKY_STRING:
+			snprintf(buffer, buffer_size, "string");
+			break;
+		default:
+			vl_log(VL_ERROR, "Unknown data type: %d!\n", data_type);
+			snprintf(buffer, buffer_size, "NULL");
+			return 0;
+	}
+
+	return 1;
+}
 
 bool snaky_file_exists(const char *file_path)
 {
@@ -1896,40 +2103,39 @@ int snaky_read_file_buf(const char *file_path, char *buffer, size_t buffer_size,
 		return 0;
 	}
 
-	// TODO use snaky strings while reading, no more MAX_LINE_LEN
-
 	if(mode == SNAKY_FWRITE_BINARY)
 	{
-		snaky_attrib_data data = {0};
-		dynmaps_init(&data);
-		if(data.alloc_failure)
+		snaky_attrib_map map = {0};
+		dynmaps_init(&map);
+		if(map.alloc_failure)
 		{
 			vl_log(VL_ERROR, "Allocation error!\n");
 			return 0;
 		}
 
-		if(snaky_read_file_data(file_path, &data, mode))
+		if(snaky_read_file_map(file_path, &map, mode))
 		{
-			for(size_t i = 0; i < data.size; ++i)
+			for(size_t i = 0; i < map.size; ++i)
 			{
 				// set attrib in original buffer
-				if(!snaky_set_attrib_buf(buffer, buffer_size, data.keys[i], data.values[i]))
+				if(!snaky_set_attrib_buf(buffer, buffer_size, map.keys[i], map.values[i]))
 				{
-					dynmaps_free_strkeyval(&data);
+					dynmaps_free_strkeyval(&map);
 					goto snaky_read_file_err;
 				}
 			}
 
-			dynmaps_free_strkeyval(&data);
+			dynmaps_free_strkeyval(&map);
 		}
 		else
 		{
-			dynmaps_free_strkeyval(&data);
+			dynmaps_free_strkeyval(&map);
 			goto snaky_read_file_err;
 		}
 	}
 	else if(mode == SNAKY_FWRITE_TEXT)
 	{
+		// TODO use snaky strings while reading, no more MAX_LINE_LEN
 		char read[SNAKY_MAX_LINE_LEN + 1];
 		size_t total_size = 0;
 		while(fgets(read, sizeof(read), f))
@@ -1948,31 +2154,31 @@ int snaky_read_file_buf(const char *file_path, char *buffer, size_t buffer_size,
 	}
 	else if(mode == SNAKY_FWRITE_ENCRYPT)
 	{
-		snaky_attrib_data data = {0};
-		dynmaps_init(&data);
-		if(data.alloc_failure)
+		snaky_attrib_map map = {0};
+		dynmaps_init(&map);
+		if(map.alloc_failure)
 		{
 			vl_log(VL_ERROR, "Allocation error!\n");
 			return 0;
 		}
 
-		if(snaky_read_file_data(file_path, &data, mode))
+		if(snaky_read_file_map(file_path, &map, mode))
 		{
-			for(size_t i = 0; i < data.size; ++i)
+			for(size_t i = 0; i < map.size; ++i)
 			{
 				// set attrib in original buffer
-				if(!snaky_set_attrib_buf(buffer, buffer_size, data.keys[i], data.values[i]))
+				if(!snaky_set_attrib_buf(buffer, buffer_size, map.keys[i], map.values[i]))
 				{
-					dynmaps_free_strkeyval(&data);
+					dynmaps_free_strkeyval(&map);
 					goto snaky_read_file_err;
 				}
 			}
 
-			dynmaps_free_strkeyval(&data);
+			dynmaps_free_strkeyval(&map);
 		}
 		else
 		{
-			dynmaps_free_strkeyval(&data);
+			dynmaps_free_strkeyval(&map);
 			goto snaky_read_file_err;
 		}
 	}else
@@ -2004,27 +2210,27 @@ int snaky_read_file_str(const char *file_path, snaky_string *str, snaky_fwrite_m
 
 	if(mode == SNAKY_FWRITE_BINARY)
 	{
-		snaky_attrib_data data = {0};
-		dynmaps_init(&data);
-		if(data.alloc_failure)
+		snaky_attrib_map map = {0};
+		dynmaps_init(&map);
+		if(map.alloc_failure)
 		{
 			vl_log(VL_ERROR, "Allocation error!\n");
 			return 0;
 		}
 
-		if(snaky_read_file_data(file_path, &data, mode))
+		if(snaky_read_file_map(file_path, &map, mode))
 		{
-			for(size_t i = 0; i < data.size; ++i)
+			for(size_t i = 0; i < map.size; ++i)
 			{
 				// set attrib in original buffer
-				if(!snaky_set_attrib_buf(str->data, str->size, data.keys[i], data.values[i]))
+				if(!snaky_set_attrib_buf(str->data, str->size, map.keys[i], map.values[i]))
 				{
-					dynmaps_free_strkeyval(&data);
+					dynmaps_free_strkeyval(&map);
 					goto snaky_read_file_err;
 				}
 			}
 
-			dynmaps_free_strkeyval(&data);
+			dynmaps_free_strkeyval(&map);
 		}
 		else
 			goto snaky_read_file_err;
@@ -2046,21 +2252,27 @@ int snaky_read_file_str(const char *file_path, snaky_string *str, snaky_fwrite_m
 	}
 	else if(mode == SNAKY_FWRITE_ENCRYPT)
 	{
-		snaky_attrib_data data = {0};
-
-		if(snaky_read_file_data(file_path, &data, mode))
+		snaky_attrib_map map = {0};
+		dynmaps_init(&map);
+		if(map.alloc_failure)
 		{
-			for(size_t i = 0; i < data.size; ++i)
+			vl_log(VL_ERROR, "Allocation error!\n");
+			return 0;
+		}
+
+		if(snaky_read_file_map(file_path, &map, mode))
+		{
+			for(size_t i = 0; i < map.size; ++i)
 			{
 				// set attrib in original buffer
-				if(!snaky_set_attrib_buf(str->data, str->size, data.keys[i], data.values[i]))
+				if(!snaky_set_attrib_buf(str->data, str->size, map.keys[i], map.values[i]))
 				{
-					dynmaps_free_strkeyval(&data);
+					dynmaps_free_strkeyval(&map);
 					goto snaky_read_file_err;
 				}
 			}
 
-			dynmaps_free_strkeyval(&data);
+			dynmaps_free_strkeyval(&map);
 		}
 		else
 			goto snaky_read_file_err;
@@ -2110,9 +2322,9 @@ static void decrypt_str(char *data, size_t len, int key)
 			data[i] = (c - '0' - key + 10) % 10 + '0';
 	}
 }
-int snaky_read_file_data(const char *file_path, snaky_attrib_data *data, snaky_fwrite_mode mode)
+int snaky_read_file_map(const char *file_path, snaky_attrib_map *map, snaky_fwrite_mode mode)
 {
-	if(!data || !data->keys || !data->values)
+	if(!map || !map->keys || !map->values)
 		return 0;
 
 	FILE *f = fopen(file_path, "rb");
@@ -2122,7 +2334,7 @@ int snaky_read_file_data(const char *file_path, snaky_attrib_data *data, snaky_f
 		return 0;
 	}
 
-	// determine how the data should be read:
+	// determine how the map should be read:
 	if(mode == SNAKY_FWRITE_BINARY)
 	{
 		// first read the number of entries in the file:
@@ -2156,8 +2368,8 @@ int snaky_read_file_data(const char *file_path, snaky_attrib_data *data, snaky_f
 			val[val_len] = '\0';
 
 			// copy string into map
-			dynmaps_set_strkeyval(data, key, val);
-			if(data->alloc_failure)
+			dynmaps_set_strkeyval(map, key, val);
+			if(map->alloc_failure)
 			{
 				vl_log(VL_ERROR, "Allocation error!\n");
 				return 0;
@@ -2167,11 +2379,11 @@ int snaky_read_file_data(const char *file_path, snaky_attrib_data *data, snaky_f
 	else if(mode == SNAKY_FWRITE_TEXT)
 	{
 		/*
-		   because text mode writes plain text, binary data like
+		   because text mode writes plain text, binary map like
 		   the map's size or the lengths of keys and values
 		   are not present in the file. Therefore, the entirety
 		   of the file needs to be read into a string buffer
-		   and the arg data needs to be collected from that instead
+		   and the arg map needs to be collected from that instead
 		*/
 		snaky_string file_contents = {0};
 		if(!snaky_prepare_str(&file_contents, 1024))
@@ -2183,8 +2395,8 @@ int snaky_read_file_data(const char *file_path, snaky_attrib_data *data, snaky_f
 			goto snaky_read_file_err;
 		}
 
-		// collect attrib data from that string
-		int success = snaky_get_attrib_data(file_contents.data, data);
+		// collect attrib map from that string
+		int success = snaky_generate_attrib_map(file_contents.data, map);
 
 		// free allocated string buffer
 		snaky_free_str(&file_contents);
@@ -2225,8 +2437,8 @@ int snaky_read_file_data(const char *file_path, snaky_attrib_data *data, snaky_f
 
 			decrypt_str(val, val_len, encrypt_key);
 
-			dynmaps_set_strkeyval(data, key, val);
-			if(data->alloc_failure)
+			dynmaps_set_strkeyval(map, key, val);
+			if(map->alloc_failure)
 			{
 				vl_log(VL_ERROR, "Allocation error!\n");
 				return 0;
@@ -2240,18 +2452,18 @@ int snaky_read_file_data(const char *file_path, snaky_attrib_data *data, snaky_f
 	goto snaky_read_file_success;
 
 	snaky_read_file_err:
-	vl_log(VL_ERROR, "Failed to read attribute data from file: '%s'!\n", file_path);
+	vl_log(VL_ERROR, "Failed to read attribute map from file: '%s'!\n", file_path);
 	fclose(f);
 	return 0;
 
 	snaky_read_file_success:
-	vl_log(VL_SUCCESS, "Attribute data read from file: '%s'!\n", file_path);
+	vl_log(VL_SUCCESS, "Attribute map read from file: '%s'!\n", file_path);
 	fclose(f);
 	return 1;
 }
-int snaky_write_file_data(const char *file_path, snaky_attrib_data *data, snaky_fwrite_mode mode)
+int snaky_write_file_map(const char *file_path, snaky_attrib_map *map, snaky_fwrite_mode mode)
 {
-	if(!file_path || !data || data->size == 0 || data->alloc_failure)
+	if(!file_path || !map || map->size == 0 || map->alloc_failure)
 		return 0;
 
 	FILE *f = fopen(file_path, "wb");
@@ -2261,27 +2473,27 @@ int snaky_write_file_data(const char *file_path, snaky_attrib_data *data, snaky_
 		return 0;
 	}
 
-	// write each part of the data to the file:
+	// write each part of the map to the file:
 
-	// determine how the data should be written:
+	// determine how the map should be written:
 	if(mode == SNAKY_FWRITE_BINARY)
 	{
 		// first, the number of entries in the map:
-		if(fwrite(&data->size, sizeof(data->size), 1, f) != 1)
+		if(fwrite(&map->size, sizeof(map->size), 1, f) != 1)
 			goto snaky_write_file_err;
 
 		// now write each entry in the map:
-		for(size_t i = 0; i < data->size; ++i)
+		for(size_t i = 0; i < map->size; ++i)
 		{
-			size_t key_len = strlen(data->keys[i]);
-			size_t val_len = strlen(data->values[i]);
+			size_t key_len = strlen(map->keys[i]);
+			size_t val_len = strlen(map->values[i]);
 
 			// write length of key
 			if(fwrite(&key_len, sizeof(size_t), 1, f) != 1)
 				goto snaky_write_file_err;
 
 			// write key contents
-			if(fwrite(data->keys[i], sizeof(char), key_len, f) != key_len)
+			if(fwrite(map->keys[i], sizeof(char), key_len, f) != key_len)
 				goto snaky_write_file_err;
 
 			// write length of value
@@ -2289,25 +2501,25 @@ int snaky_write_file_data(const char *file_path, snaky_attrib_data *data, snaky_
 				goto snaky_write_file_err;
 
 			// write value contents
-			if(fwrite(data->values[i], sizeof(char), val_len, f) != val_len)
+			if(fwrite(map->values[i], sizeof(char), val_len, f) != val_len)
 				goto snaky_write_file_err;
 		}
 	}
 	else if(mode == SNAKY_FWRITE_TEXT)
 	{
 		// write each entry in the map:
-		for(size_t i = 0; i < data->size; ++i)
+		for(size_t i = 0; i < map->size; ++i)
 		{
-			size_t key_len = strlen(data->keys[i]);
-			size_t val_len = strlen(data->values[i]);
+			size_t key_len = strlen(map->keys[i]);
+			size_t val_len = strlen(map->values[i]);
 
 			if(fwrite("<", sizeof(char), 1, f) != 1)
 				goto snaky_write_file_err;
-			if(fwrite(data->keys[i], sizeof(char), key_len, f) != key_len)
+			if(fwrite(map->keys[i], sizeof(char), key_len, f) != key_len)
 				goto snaky_write_file_err;
 			if(fwrite("=", sizeof(char), 1, f) != 1)
 				goto snaky_write_file_err;
-			if(fwrite(data->values[i], sizeof(char), val_len, f) != val_len)
+			if(fwrite(map->values[i], sizeof(char), val_len, f) != val_len)
 				goto snaky_write_file_err;
 			if(fwrite(">\n", sizeof(char), 2, f) != 2)
 				goto snaky_write_file_err;
@@ -2317,13 +2529,13 @@ int snaky_write_file_data(const char *file_path, snaky_attrib_data *data, snaky_
 	{
 		// same as BINARY mode but encrypt strings:
 
-		if(fwrite(&data->size, sizeof(data->size), 1, f) != 1)
+		if(fwrite(&map->size, sizeof(map->size), 1, f) != 1)
 			goto snaky_write_file_err;
 
-		for(size_t i = 0; i < data->size; ++i)
+		for(size_t i = 0; i < map->size; ++i)
 		{
-			size_t key_len = strlen(data->keys[i]);
-			size_t val_len = strlen(data->values[i]);
+			size_t key_len = strlen(map->keys[i]);
+			size_t val_len = strlen(map->values[i]);
 
 			if(fwrite(&key_len, sizeof(size_t), 1, f) != 1)
 				goto snaky_write_file_err;
@@ -2332,7 +2544,7 @@ int snaky_write_file_data(const char *file_path, snaky_attrib_data *data, snaky_
 			if(!encrypted_key)
 				goto snaky_write_file_err;
 			// copy key into encrypted key buffer
-			strcpy(encrypted_key, data->keys[i]);
+			strcpy(encrypted_key, map->keys[i]);
 
 			encrypt_str(encrypted_key, key_len, encrypt_key);
 			if(fwrite(encrypted_key, sizeof(char), key_len, f) != key_len)
@@ -2350,7 +2562,7 @@ int snaky_write_file_data(const char *file_path, snaky_attrib_data *data, snaky_
 			if(!encrypted_value)
 				goto snaky_write_file_err;
 			// copy value into encrypted value buffer
-			strcpy(encrypted_value, data->values[i]);
+			strcpy(encrypted_value, map->values[i]);
 
 			encrypt_str(encrypted_value, val_len, encrypt_key);
 			if(fwrite(encrypted_value, sizeof(char), val_len, f) != val_len)
@@ -2369,12 +2581,12 @@ int snaky_write_file_data(const char *file_path, snaky_attrib_data *data, snaky_
 	goto snaky_write_file_success;
 
 	snaky_write_file_err:
-	vl_log(VL_ERROR, "Failed to write attribute data to file: '%s'!\n", file_path);
+	vl_log(VL_ERROR, "Failed to write attribute map to file: '%s'!\n", file_path);
 	fclose(f);
 	return 0;
 
 	snaky_write_file_success:
-	vl_log(VL_SUCCESS, "Attribute data written to file: '%s'!\n", file_path);
+	vl_log(VL_SUCCESS, "Attribute map written to file: '%s'!\n", file_path);
 	fclose(f);
 	return 1;
 }
@@ -2388,12 +2600,18 @@ int snaky_write_file_buf(const char *file_path, const char *buffer, snaky_fwrite
 	if(mode == SNAKY_FWRITE_BINARY)
 	{
 		// convert buffer to attrib_data and write that instead
-		snaky_attrib_data data = {0};
-
-		if(snaky_get_attrib_data(buffer, &data))
+		snaky_attrib_map map = {0};
+		dynmaps_init(&map);
+		if(map.alloc_failure)
 		{
-			snaky_write_file_data(file_path, &data, mode);
-			dynmaps_free_strkeyval(&data);
+			vl_log(VL_ERROR, "Allocation error!\n");
+			return 0;
+		}
+
+		if(snaky_generate_attrib_map(buffer, &map))
+		{
+			snaky_write_file_map(file_path, &map, mode);
+			dynmaps_free_strkeyval(&map);
 		}
 		else
 			goto snaky_write_file_err;
@@ -2415,12 +2633,18 @@ int snaky_write_file_buf(const char *file_path, const char *buffer, snaky_fwrite
 	}
 	else if(mode == SNAKY_FWRITE_ENCRYPT)
 	{
-		snaky_attrib_data data = {0};
-
-		if(snaky_get_attrib_data(buffer, &data))
+		snaky_attrib_map map = {0};
+		dynmaps_init(&map);
+		if(map.alloc_failure)
 		{
-			snaky_write_file_data(file_path, &data, mode);
-			dynmaps_free_strkeyval(&data);
+			vl_log(VL_ERROR, "Allocation error!\n");
+			return 0;
+		}
+
+		if(snaky_generate_attrib_map(buffer, &map))
+		{
+			snaky_write_file_map(file_path, &map, mode);
+			dynmaps_free_strkeyval(&map);
 		}
 		else
 			goto snaky_write_file_err;
