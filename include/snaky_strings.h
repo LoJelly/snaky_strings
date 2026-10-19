@@ -610,7 +610,11 @@ SNAKY_API float snaky_parse_float(const char *origin, const char *str, int *out_
 SNAKY_API double snaky_parse_double(const char *origin, const char *str, int *out_success);
 /**
   Similarly to other snaky_parse_[type] functions, this function
-  parses a generic value based on a target data type.
+  parses a generic value based on a target data type. More specifically,
+  this function is intended for numerical expressions. The
+  SNAKY_OBJECT, SNAKY_ARRAY, and SNAKY_STRING data types
+  are not supported in this function. For these 3 types, you
+  should use the snaky_parse_target_attrib...(...) functions instead.
 
   @important Because this function is generic and
   needs to be able to determine if parsing failed or not,
@@ -621,10 +625,8 @@ SNAKY_API double snaky_parse_double(const char *origin, const char *str, int *ou
   @param str The string holding the generic value. This is not
   an attribute string.
   @param target_type The data type to try to parse
-  the value as. For example, using SNAKY_DATA_TYPE_INT
+  the value as. For example, using SNAKY_INT
   indicates the value should be parsed as an integer.
-  Note that the SNAKY_AUTO type does not work in this
-  function. SNAKY_AUTO only works in snaky_parse_target_attrib_value(...).
   @param out_value A pointer to the actual variable
   that will hold the final parsed result.
   @param out_success A pointer to an int that indicates whether

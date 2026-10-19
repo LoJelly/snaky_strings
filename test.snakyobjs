@@ -1,2 +1,5 @@
-<x :float = 3.0>
-<y :float = x * 38.82>
+<
+	nums = [2, 4, 6, 8, 10, 12, 14, 16],
+	x:int = 3,
+	result:int = nums[x]
+>

@@ -323,6 +323,16 @@ static int resolve_data_type(const char *start, snaky_data_type *out_data_type, 
 	if(out_jump)
 		*out_jump += num_spaces;
 
+	// if the first char is a letter, skip to the ':'
+	if(isalpha(*start))
+	{
+		while(*start && *start != ':')
+			start++;
+	}
+	// if now on the ':', skip it
+	if(*start == ':')
+		start++;
+
 	// now find which data type the user provided
 	if(strncmp(start, "char", 4) == 0)
 	{
@@ -374,15 +384,7 @@ static int resolve_data_type(const char *start, snaky_data_type *out_data_type, 
 	}
 	else
 	{
-		// see if a '[' or '{' char is found after the '=' sign
-		while(*start && *start != '=')
-		{
-			start++;
-			if(out_jump)
-				*out_jump += 1;
-		}
-
-		vl_log(VL_WARNING, "Unknown data type in string: '%s'! Defaulting to SNAKY_STRING!\n", origin);
+		vl_log(VL_ERROR, "Unknown or missing data type in string: '%s'! Defaulting to SNAKY_STRING!\n", origin);
 
 		// default to the string type when no type is given
 		*out_data_type = SNAKY_STRING;
@@ -496,9 +498,17 @@ static int parse_target_attrib(const char *attribs_start, snaky_string *sbuffer,
 
 	// determine if a nested attribute or string is given
 	if(*attribs_start == '{')
+	{
+		if(out_data_type)
+			*out_data_type = SNAKY_OBJECT;
 		return parse_value(attribs_start, sbuffer, buffer, buffer_size, out_start_pos, false, find_end_of_object, origin);
+	}
 	else if(*attribs_start == '[')
+	{
+		if(out_data_type)
+			*out_data_type = SNAKY_ARRAY;
 		return parse_value(attribs_start, sbuffer, buffer, buffer_size, out_start_pos, false, find_end_of_array, origin);
+	}
 
 	// if not a nested string, copy the attrib value normally
 	return parse_value(attribs_start, sbuffer, buffer, buffer_size, out_start_pos, true, find_end_of_attribs, origin);
@@ -509,8 +519,6 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 
 	if(!str || strlen(str) == 0 || !attrib_name || attrib_len == 0)
 		return 0;
-
-	bool in_top_most_level = false;
 
 	// see if user is trying to find a nested attribute :
 
@@ -576,10 +584,16 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 		}
 
 		// because the attrib name contains a '[N]' part, the actual length of the array's name in the string does not include these characters
-		size_t actual_array_name_len = resolved_attrib_len - 2 - index_value_len;
+		size_t actual_array_name_len = 0;
+		for(const char *a = attrib_name; *a; ++a)
+		{
+			if(*a == '[')
+				break;
+			actual_array_name_len++;
+		}
 
 		// now find the array in the attribute string, go to the specific index, and parse the value there
-		for(const char *p = str; *p && *p != '>'; ++p)
+		for(const char *p = str; *p; ++p)
 		{
 			if(strncmp(p, resolved_attrib_name, actual_array_name_len) == 0)
 			{
@@ -631,7 +645,9 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 		return 0;
 	}
 
-	for(const char *p = str; *p && *p != '>'; ++p)
+	bool in_attrib_string = false;
+
+	for(const char *p = str; *p; ++p)
 	{
 		// get char
 		char c = *p;
@@ -675,10 +691,10 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 		}
 
 		// when the first '<' or ',' is encountered, compare attrib to the target arg
-		if(c == '<' && !in_top_most_level)
+		if(c == '<' && !in_attrib_string)
 		{
-			// now the parser is in the top-most level
-			in_top_most_level = true;
+			// now the parser is in an attribute string
+			in_attrib_string = true;
 
 			// compare the attribute with the target attribute
 			const char *attribs_start = p + 1;
@@ -692,13 +708,16 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 			}
 
 			if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
+			{
+				resolve_data_type(attribs_start, out_data_type, NULL);
 				return parse_target_attrib(attribs_start, sbuffer, buffer, buffer_size, attrib_name, attrib_len, out_start_pos, out_data_type);
+			}
 
 			continue;
 		}
 
-		// parse all subsequent attributes
-		if(c == ',' && in_top_most_level)
+		// parse all subsequent attributes in an attrib string
+		if(c == ',' && in_attrib_string)
 		{
 			// same logic as above
 			const char *attribs_start = p + 1;
@@ -713,10 +732,17 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 			}
 
 			if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
+			{
+				resolve_data_type(attribs_start, out_data_type, NULL);
 				return parse_target_attrib(attribs_start, sbuffer, buffer, buffer_size, attrib_name, attrib_len, out_start_pos, out_data_type);
+			}
 
 			continue;
 		}
+
+		// exit an attrib string when '>' is found
+		if(c == '>' && in_attrib_string)
+			in_attrib_string = false;
 	}
 
 	return 0;
@@ -874,9 +900,9 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 	if(!str || strlen(str) == 0)
 		return 0;
 
-	bool in_top_most_level = false;
+	bool in_attrib_string = false;
 
-	for(const char *p = str; *p && *p != '>'; ++p)
+	for(const char *p = str; *p; ++p)
 	{
 		// get char
 		char c = *p;
@@ -904,9 +930,9 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		}
 
 		// when the first '<' or ',' is encountered, see what the very next attrib is
-		if((c == '<' || c == ',') && !in_top_most_level)
+		if((c == '<' || c == ',') && !in_attrib_string)
 		{
-			in_top_most_level = true;
+			in_attrib_string = true;
 
 			const char *attribs_start = p + 1;
 
@@ -922,7 +948,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		}
 
 		// parse the very next attrib found
-		if(c == ',' && in_top_most_level)
+		if(c == ',' && in_attrib_string)
 		{
 			const char *attribs_start = p + 1;
 
@@ -938,7 +964,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		}
 
 		// nested attributes are skipped
-		if(c == '<' && in_top_most_level)
+		if(c == '<' && in_attrib_string)
 		{
 			while(*p && *p != '>')
 				++p;
@@ -951,6 +977,10 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 
 			continue;
 		}
+
+		// exit an attrib string when '>' is found
+		if(c == '>' && in_attrib_string)
+			in_attrib_string = false;
 	}
 
 	return 0;
@@ -1396,7 +1426,7 @@ size_t snaky_count_attribs(const char *str)
 
 	size_t count = 0;
 
-	for(const char *p = str; *p && *p != '>'; ++p)
+	for(const char *p = str; *p; ++p)
 	{
 		char c = *p;
 
@@ -1674,8 +1704,34 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 	{
 		char attrib_name[SNAKY_BUF_SIZE + 1];
 		size_t i = 0;
-		while(**str && (isalpha(**str) || **str == '_' || (i > 0 && isdigit(**str))) && i + 1 < sizeof(attrib_name))
+
+		// keep track of where to start the recursive search
+		const char *start_of_str = *str;
+		// whether or not only letters are accepted
+		bool checking_only_alpha = true;
+		while(**str && i + 1 < sizeof(attrib_name))
+		{
+			// the first character cannot be a digit
+			if(i == 0 && isdigit(**str))
+			{
+				vl_log(VL_ERROR, "The first character in a function or attribute cannot be a digit!\n");
+				*out_success = 0;
+				return 0.0f;
+			}
+
+			// stop searching for just letters when an array index starts
+			if(**str == '[')
+				checking_only_alpha = false;
+
+			// re-enable alpha-only rule
+			if(**str == ']')
+				checking_only_alpha = true;
+
+			if(checking_only_alpha && !isalpha(**str))
+				break;
+
 			attrib_name[i++] = *(*str)++;
+		}
 
 		attrib_name[i] = '\0';
 
@@ -1683,8 +1739,27 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 
 		// try to parse as a target attribute:
 		char attrib[SNAKY_BUF_SIZE + 1];
-		if(snaky_parse_target_attrib_buf(origin, attrib, sizeof(attrib), attrib_name, NULL, NULL))
+		snaky_data_type data_type = SNAKY_INVALID_VALUE;
+		if(snaky_parse_target_attrib_buf(origin, attrib, sizeof(attrib), attrib_name, NULL, &data_type))
 		{
+			// if the attrib is an invalid type, no value can be parsed
+			if(data_type == SNAKY_ARRAY)
+			{
+				vl_log(VL_ERROR, "The parsed attribute '%s' is an array, cannot parse a value!\n", attrib_name);
+				*out_success = 0;
+				return 0.0f;
+			}
+			else if(data_type == SNAKY_OBJECT)
+			{
+				vl_log(VL_ERROR, "The parsed attribute '%s' is an object, cannot parse a value!\n", attrib_name);
+				*out_success = 0;
+				return 0.0f;
+			}
+			else if(data_type == SNAKY_STRING)
+			{
+				vl_log(VL_ERROR, "The parsed attribute '%s' is a string, cannot parse a value!\n", attrib_name);
+			}
+
 			float f = 0.0f;
 			int s = 0;
 			snaky_parse_value(origin, attrib, SNAKY_FLOAT, &f, &s);
@@ -1990,7 +2065,7 @@ void snaky_parse_value(const char *origin, const char *str, snaky_data_type targ
 	}
 
 	if(*out_success == 0)
-		vl_log(VL_ERROR, "Failed to parse target string: '%s'!\n", str);
+		vl_log(VL_ERROR, "Failed to parse string value: '%s'!\n", str);
 }
 void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, const char **out_start_pos, int *out_success)
 {
