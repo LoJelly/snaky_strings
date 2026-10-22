@@ -298,6 +298,24 @@ static void skip_whitespace(const char **str, size_t *out_num_spaces)
 		if(out_num_spaces)
 			*out_num_spaces += 1;
 		(*str)++;
+
+		// after moving to next char, check for a comment
+		if(strncmp(*str, "/*", 2) == 0)
+		{
+			const char *comment_origin = *str;
+
+			while(**str && strncmp(*str, "*/", 2) != 0)
+				(*str)++;
+
+			if(!**str)
+			{
+				vl_log(VL_ERROR, "Expected '*/' to close off a comment in string: '%s'!\n", comment_origin);
+				return;
+			}
+
+			// when the '*/' is found, skip those last 2 chars
+			(*str) += 2;
+		}
 	}
 }
 
