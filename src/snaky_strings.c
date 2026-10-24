@@ -288,34 +288,52 @@ static const char *find_end_of_attribs(const char *start)
 	return find_end_of_group(start, '<', '>');
 }
 
+// skip all comments in a string until a valid char is reached
+static void skip_comment(const char **str, size_t *out_num_spaces)
+{
+	// after moving to next char, check for a comment
+	const char *comment_origin = *str;
+
+	while(**str && strncmp(*str, "*/", 2) != 0)
+	{
+		(*str)++;
+
+		if(out_num_spaces)
+			*out_num_spaces += 1;
+	}
+
+	if(!**str)
+	{
+		vl_log(VL_ERROR, "Expected '*/' to close off a comment in string: '%s'!\n", comment_origin);
+		return;
+	}
+
+	// when the '*/' is found, skip those last 2 chars
+	(*str) += 2;
+	if(out_num_spaces)
+		*out_num_spaces += 2;
+}
 // skip all whitespace in a string until a valid char is reached
 static void skip_whitespace(const char **str, size_t *out_num_spaces)
 {
+	// reset num spaces to 0
 	if(out_num_spaces)
 		*out_num_spaces = 0;
+
+	// skip all comments found
+	while(strncmp(*str, "/*", 2) == 0)
+		skip_comment(str, out_num_spaces);
+
+	// now skip all spaces, and comments found after those spaces
 	while(**str && isspace(**str))
 	{
 		if(out_num_spaces)
 			*out_num_spaces += 1;
 		(*str)++;
 
-		// after moving to next char, check for a comment
-		if(strncmp(*str, "/*", 2) == 0)
-		{
-			const char *comment_origin = *str;
-
-			while(**str && strncmp(*str, "*/", 2) != 0)
-				(*str)++;
-
-			if(!**str)
-			{
-				vl_log(VL_ERROR, "Expected '*/' to close off a comment in string: '%s'!\n", comment_origin);
-				return;
-			}
-
-			// when the '*/' is found, skip those last 2 chars
-			(*str) += 2;
-		}
+		// skip any comments found
+		while(strncmp(*str, "/*", 2) == 0)
+			skip_comment(str, out_num_spaces);
 	}
 }
 
@@ -350,6 +368,11 @@ static int resolve_data_type(const char *start, snaky_data_type *out_data_type, 
 	// if now on the ':', skip it
 	if(*start == ':')
 		start++;
+
+	// skip all whitespace after the ':'
+	skip_whitespace(&start, &num_spaces);
+	if(out_jump)
+		*out_jump += num_spaces;
 
 	// now find which data type the user provided
 	if(strncmp(start, "char", 4) == 0)
@@ -1463,21 +1486,89 @@ bool snaky_is_object(const char *str)
 	return *str && *str == '{';
 }
 
-const char *snaky_get_attrib_pos(const char *str, const char *attrib_name)
+void snaky_goto_attrib(const char *str, const char *attrib_name, const char **out_attrib_pos)
 {
+	if(!out_attrib_pos)
+		return;
+
+	*out_attrib_pos = NULL;
+
 	size_t attrib_name_len = attrib_name ? strlen(attrib_name) : 0;
 
-	if(!str || !attrib_name || strlen(str) == 0 || attrib_name_len == 0)
-		return NULL;
+	if(!str || strlen(str) == 0 || !attrib_name || attrib_name_len == 0)
+		return;
 
 	while(*str)
 	{
 		if(strncmp(str, attrib_name, attrib_name_len) == 0)
-			return str;
+		{
+			*out_attrib_pos = str;
+			return;
+		}
+
 		str++;
 	}
 
-	return NULL;
+	vl_log(VL_ERROR, "No attribute with this name '%s' found!\n", attrib_name);
+}
+void snaky_goto_label(const char *str, const char *label_name, const char **out_pos)
+{
+	if(!out_pos)
+		return;
+
+	*out_pos = NULL;
+
+	size_t label_name_len = label_name ? strlen(label_name) : 0;
+
+	if(!str || strlen(str) == 0 || !label_name || label_name_len == 0)
+		return;
+
+	while(*str)
+	{
+		// first, find the "/[" characters
+		if(strncmp(str, "/[", 2) == 0)
+		{
+			const char *label_origin = str;
+
+			// move past the "/["
+			str += 2;
+
+			skip_whitespace(&str, NULL);
+
+			// now see if the name matches
+			if(strncmp(str, label_name, label_name_len) == 0)
+			{
+				// if the names match, now move to the first valid char after the closing "]/" characters
+				while(*str)
+				{
+					if(strncmp(str, "]/", 2) == 0)
+					{
+						// move past the "]/"
+						str += 2;
+
+						// skip all whitespace again
+						skip_whitespace(&str, NULL);
+
+						// see if a valid char exists there
+						if(!*str)
+						{
+							vl_log(VL_ERROR, "No valid characters found after label: '%s'!\n", label_origin);
+						}
+
+						// now return the pos
+						*out_pos = str;
+						return;
+					}
+
+					str++;
+				}
+			}
+		}
+
+		str++;
+	}
+
+	vl_log(VL_ERROR, "No label with this name '%s' found!\n", label_name);
 }
 
 int snaky_generate_attrib_map(const char *str, snaky_attrib_map *map)

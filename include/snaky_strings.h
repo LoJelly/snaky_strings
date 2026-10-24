@@ -506,11 +506,46 @@ SNAKY_API bool snaky_is_object(const char *str);
   a string and returns a pointer to the start of
   the attribute name in the original string.
 
-  @return The pointer to the first character in the
-  found attribute name in the original string,
+  If 'out_attrib_pos' is NULL, the function will not
+  do anything. Otherwise, it will be equal to
+  the pointer to the first character in the
+  matching attribute name in the original string,
   or NULL if the attribute is not found.
 */
-SNAKY_API const char *snaky_get_attrib_pos(const char *str, const char *attrib_name);
+SNAKY_API void snaky_goto_attrib(const char *str, const char *attrib_name, const char **out_attrib_pos);
+/**
+  Finds the given label within an attribute string
+  and returns the position of it.
+
+  Labels are used to organize and navigate large
+  files more easily.
+
+  Labels are expected to be on a single line, with no
+  characters before or after the label's name.
+  A label is created like this:
+
+  "/[ LABEL NAME ]/"
+
+  A full example of a label looks like this:
+
+  "
+  /[ Generic Options ]/
+  <x = y>
+  "
+
+  @note For the 'label_name' parameter, you do not have to include
+  the "/[" or "]/" characters, just the name of the label. In the
+  example above, the label name string would just be "Generic Options."
+
+  When using this function to go to the 'Generic Options' label,
+  the returned character is the '<.'
+
+  If 'out_pos' is NULL, the function will not do anything.
+  Othwerise, it will be equal to the pointer to the
+  first character after the label,
+  or NULL if the label was not found.
+*/
+SNAKY_API void snaky_goto_label(const char *str, const char *label_name, const char **out_pos);
 
 /**
   Obtains all the data within an attribute string.

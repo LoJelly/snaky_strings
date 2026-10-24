@@ -1,5 +1,11 @@
+/[My Label]/
 <
 	nums = [2, 4, 6, 8, 10, 12, 14, 16],
 	x:int = 3,
 	result:int = nums[x]
+>
+SOME RANDOM TEXT IN THE MIDDLE
+<
+	icon = PENCIL,
+	bg-color = BLUE
 >
