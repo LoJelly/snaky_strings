@@ -347,7 +347,7 @@ static int resolve_data_type(const char *start, snaky_data_type *out_data_type, 
 	if(!out_data_type)
 		return 0;
 	// default to invalid value
-	*out_data_type = SNAKY_INVALID_VALUE;
+	*out_data_type = SNAKY_INVALID;
 
 	const char *origin = start;
 
@@ -453,7 +453,7 @@ static void return_start_pos(const char *attribs_start, const char **out_start_p
 	}
 }
 
-static int parse_bool_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size)
+static int parse_bool_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value)
 {
 	/*
 	   the expression should be equal to another bool value within the string,
@@ -464,10 +464,12 @@ static int parse_bool_expression(const char *str_origin, const char *expr, snaky
 	{
 		int s = 0;
 		bool b = snaky_parse_bool(value, &s);
+		if(out_bool_value)
+			*out_bool_value = b;
 		if(!s)
 		{
 			// try to parse as another bool expression?
-			int be = parse_bool_expression(str_origin, value, sbuffer, buffer, buffer_size);
+			int be = parse_bool_expression(str_origin, value, sbuffer, buffer, buffer_size, out_bool_value);
 			if(be)
 				return 1;
 			else
@@ -503,7 +505,7 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 		end_pos++;
 		if(!*value_start_copy)
 		{
-			vl_log(VL_ERROR, "Unexpected termination of string: '%s'\n", value_start_copy_origin);
+			vl_log(VL_ERROR, "Unexpected termination of string while parsing value: '%s'\n", value_start_copy_origin);
 			return 0;
 		}
 	}
@@ -564,11 +566,11 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 	{
 		skip_whitespace(&p, NULL);
 
+		// see if a '?' operator was used
 		if(*p == '?')
 		{
 			// skip the '?'
 			++p;
-
 			skip_whitespace(&p, NULL);
 
 			// get the boolean's name
@@ -587,14 +589,11 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 			char bool_value[SNAKY_BUF_SIZE + 1];
 			if(snaky_parse_target_attrib_buf(str_origin, bool_value, sizeof(bool_value), bool_name, NULL, NULL))
 			{
-				// now determine whether or not the boolean evaluates to true or false
-				int s = 0;
-				bool b = snaky_parse_bool(bool_value, &s);
-				if(!s)
-				{
-					vl_log(VL_ERROR, "Boolean expected after '?' operator!\n");
+				// try to parse the bool as a bool expression
+				bool b = false;
+				char new_bool_value[SNAKY_BUF_SIZE + 1];
+				if(!parse_bool_expression(str_origin, bool_value, NULL, new_bool_value, sizeof(new_bool_value), &b))
 					return 0;
-				}
 
 				// now parse the options after the first and second '|' parts of the expression
 
@@ -618,7 +617,6 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 				{
 					// skip the first '|'
 					p++;
-
 					skip_whitespace(&p, NULL);
 
 					// parse the next string
@@ -650,7 +648,6 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 
 					// now 'p' points to the second '|', skip it
 					p++;
-
 					skip_whitespace(&p, NULL);
 
 					// parse the next string
@@ -673,13 +670,18 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 					snprintf(buffer, buffer_size, "%s", resolved_opt);
 
 				// now see if the option was a bool as well
-				return parse_bool_expression(str_origin, resolved_opt, sbuffer, buffer, buffer_size);
+				return parse_bool_expression(str_origin, resolved_opt, sbuffer, buffer, buffer_size, NULL);
 			}
 
 			vl_log(VL_ERROR, "Failed to parse boolean value using the given attribute name '%s' after the '?' operator!\n", bool_name);
 			return 0;
 		}
 	}
+
+	// see if the value parsed is a bool reference (counted as an expression)
+	const char *expr = sbuffer ? sbuffer->data : buffer;
+	if(parse_bool_expression(str_origin, expr, sbuffer, buffer, buffer_size, NULL))
+		return 1;
 
 	return 1;
 }
@@ -1699,6 +1701,17 @@ bool snaky_is_object(const char *str)
 {
 	return *str && *str == '{';
 }
+bool snaky_is_attrib_string(const char *str)
+{
+	if(!str || *str != '<')
+		return false;
+
+	// find the matching '>'
+	const char *end_pos = find_end_of_attribs(str);
+
+	// if a matching '>' was found, then it is an attribute string
+	return end_pos != NULL;
+}
 
 void snaky_goto_attrib(const char *str, const char *attrib_name, const char **out_attrib_pos)
 {
@@ -1840,7 +1853,7 @@ int snaky_generate_attrib_list(const char *str, snaky_attrib_list *list)
 	}
 
 	const char *start_pos = str;
-	snaky_data_type data_type = SNAKY_INVALID_VALUE;
+	snaky_data_type data_type = SNAKY_INVALID;
 	while(start_pos && snaky_parse_attrib_str(start_pos, &name, &value, &start_pos, &data_type))
 	{
 		snaky_attrib_entry entry = {0};
@@ -1904,7 +1917,7 @@ int snaky_destroy_attrib_list(snaky_attrib_list *list)
 		snaky_attrib_entry *entry = &list->data[i];
 		snaky_free_str(&entry->name);
 		snaky_free_str(&entry->value);
-		entry->data_type = SNAKY_INVALID_VALUE;
+		entry->data_type = SNAKY_INVALID;
 	}
 
 	dynas_free(list);
@@ -2062,7 +2075,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 
 		// try to parse as a target attribute:
 		char attrib[SNAKY_BUF_SIZE + 1];
-		snaky_data_type data_type = SNAKY_INVALID_VALUE;
+		snaky_data_type data_type = SNAKY_INVALID;
 		if(snaky_parse_target_attrib_buf(origin, attrib, sizeof(attrib), attrib_name, NULL, &data_type))
 		{
 			// if the attrib is an invalid type, no value can be parsed
@@ -2405,10 +2418,10 @@ void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, s
 	if(!snaky_prepare_str(&attrib, SNAKY_BUF_SIZE + 1))
 		return;
 
-	snaky_data_type resolved_type = SNAKY_INVALID_VALUE;
+	snaky_data_type resolved_type = SNAKY_INVALID;
 	if(snaky_parse_target_attrib_str(str, &attrib, attrib_name, out_start_pos, &resolved_type))
 	{
-		if(resolved_type == SNAKY_INVALID_VALUE)
+		if(resolved_type == SNAKY_INVALID)
 			resolved_type = target_type;
 		snaky_parse_value(str, attrib.data, resolved_type, out_value, out_success);
 	}

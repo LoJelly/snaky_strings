@@ -22,7 +22,7 @@
   Define SNAKY_CUSTOM_BUF_SIZE to change the default
   buffer size in snaky_strings.
 
-  The default buffer size is 64.
+  The default buffer size is 128.
 */
 #ifdef SNAKY_CUSTOM_BUF_SIZE
 	#define SNAKY_BUF_SIZE SNAKY_CUSTOM_BUF_SIZE
@@ -33,12 +33,14 @@
 	  To override this value, define SNAKY_CUSTOM_BUF_SIZE
 	  and set it equal to your custom buffer size.
 	*/
-	#define SNAKY_BUF_SIZE 64
+	#define SNAKY_BUF_SIZE 128
 #endif
 
 /**
   Define SNAKY_CUSTOM_MAX_LINE_LEN to change the
   default maximum line length of snaky_strings files.
+
+  The default max line length is 256.
 */
 #ifdef SNAKY_CUSTOM_MAX_LINE_LEN
 	#define SNAKY_MAX_LINE_LEN SNAKY_CUSTOM_MAX_LINE_LEN
@@ -52,7 +54,7 @@
 /**
   Represents any kind of invalid value within snaky_strings.
 */
-#define SNAKY_INVALID_VALUE -1
+#define SNAKY_INVALID -1
 
 /**
   When trying to parse a target attribute using nested attributes,
@@ -507,6 +509,15 @@ SNAKY_API size_t snaky_count_attribs(const char *str);
   Determines if an attribute list is an object/group.
 */
 SNAKY_API bool snaky_is_object(const char *str);
+/**
+  Determines if the given string is the beginning
+  of an attribute string.
+
+  For a string to be the start of an attribute
+  string, the first char must be '<'
+  and a matching '>' has to be found.
+*/
+SNAKY_API bool snaky_is_attrib_string(const char *str);
 
 /**
   Finds the next instance of an attribute within
