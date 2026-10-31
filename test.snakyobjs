@@ -1,11 +1,2 @@
-/[My Label]/
-<
-	nums = [2, 4, 6, 8, 10, 12, 14, 16],
-	x:int = 3,
-	result:int = nums[x]
->
-SOME RANDOM TEXT IN THE MIDDLE
-<
-	icon = PENCIL,
-	bg-color = BLUE
->
+< init = TRUE, light = ? init | ON | OFF >
+< player = {max_hp = 100, hp = max_hp, pos = {<x = 0, y = x>}}>
