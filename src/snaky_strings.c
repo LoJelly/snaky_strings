@@ -453,128 +453,175 @@ static void return_start_pos(const char *attribs_start, const char **out_start_p
 	}
 }
 
-static int parse_bool_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value)
+static int parse_bool_logic_expression(const char *, const char*, snaky_string*, char*, size_t, bool*);
+static int parse_bool_terms(const char *str_origin, const char *str, const char *b1_name, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_b1, bool *out_b2)
+{
+	// parse the second bool value after the IS keyword
+	char b2_name[SNAKY_BUF_SIZE + 1];
+	size_t i = 0;
+	while(*str && *str != ',' && *str != '>')
+		b2_name[i++] = *str++;
+	b2_name[i] = '\0';
+	i = 0;
+
+	// now obtain the real bool values and compare using ==:
+
+	bool b1 = false;
+	char b1_buf[SNAKY_BUF_SIZE + 1];
+	if(!parse_bool_logic_expression(str_origin, b1_name, sbuffer, buffer, buffer_size, &b1))
+	{
+		vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b1_name);
+		return 0;
+	}
+
+	bool b2 = false;
+	char b2_buf[SNAKY_BUF_SIZE + 1];
+	if(!parse_bool_logic_expression(str_origin, b2_name, sbuffer, buffer, buffer_size, &b2))
+	{
+		vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b2_name);
+		return 0;
+	}
+
+	if(out_b1)
+		*out_b1 = b1;
+	if(out_b2)
+		*out_b2 = b2;
+
+	return 1;
+}
+static void insert_bool_value(bool value, snaky_string *sbuffer, char *buffer, size_t buffer_size)
+{
+	if(sbuffer)
+	{
+		if(value)
+			snaky_strcpy(sbuffer, "TRUE");
+		else
+			snaky_strcpy(sbuffer, "FALSE");
+	}
+	else if(buffer && buffer_size > 0)
+	{
+		if(value)
+			snprintf(buffer, buffer_size, "TRUE");
+		else
+			snprintf(buffer, buffer_size, "FALSE");
+	}
+}
+static int parse_bool_simple_expression(const char*, const char*, snaky_string*, char*, size_t, bool*);
+// parse logical bool expressions (keywords like IS, AND, and OR)
+static int parse_bool_logic_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value)
 {
 	const char *str = expr;
 
-	// determine if an 'IS' expression is being used:
+	// determine what keywords are being used:
 	char b1_name[SNAKY_BUF_SIZE + 1];
 	size_t i = 0;
-	while(*str && strncmp(str, " IS ", 4) != 0)
+	while(*str && strncmp(str, " IS ", 4) != 0 && strncmp(str, " AND ", 5) != 0 && strncmp(str, " OR ", 4) != 0)
 		b1_name[i++] = *str++;
 	b1_name[i] = '\0';
 	i = 0;
 
-	// TODO check for other expressions, like AND, OR, etc.
-
-	// if no 'IS' keyword was never found, then the logic below will still work for the lone bool value parsed:
-
-	// to determine if the 'IS' keyword was found, just compare 'b1_name' to 'expr', if they're equal, no 'IS' keyword was found
-	bool is_keyword_found = strcmp(b1_name, expr) != 0;
-
-	// if the 'IS' keyword was found, now parse the second bool value (TRUE, FALSE, ON, or OFF)
-	if(is_keyword_found)
+	// now determine which keyword was used
+	if(strncmp(str, " IS ", 4) == 0)
 	{
-		// move 4 chars ahead to skip " IS " region
+		// move past the IS keyword
 		str += 4;
 
-		// parse second bool value after the 'IS' keyword
-		char b2_name[SNAKY_BUF_SIZE + 1];
-		while(*str && *str != ',' && *str != '>')
-			b2_name[i++] = *str++;
-		b2_name[i] = '\0';
-		i = 0;
-
-		// now get the actual bool values of the attributes
-		bool b1 = false;
-		char b1_buf[SNAKY_BUF_SIZE + 1];
-		if(!parse_bool_expression(str_origin, b1_name, NULL, b1_buf, sizeof(b1_buf), &b1))
+		// the IS keyword can also be accompanied by the NOT keyword
+		bool use_not_expr = false;
+		if(strncmp(str, "NOT ", 4) == 0)
 		{
-			vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b1_name);
+			// signal that the != operator should be used instead of ==
+			use_not_expr = true;
+			str += 4;
+		}
+
+		bool b1 = false, b2 = false;
+		if(!parse_bool_terms(str_origin, str, b1_name, sbuffer, buffer, buffer_size, &b1, &b2))
 			return 0;
-		}
 
-		bool b2 = false;
-		char b2_buf[SNAKY_BUF_SIZE + 1];
-		if(!parse_bool_expression(str_origin, b2_name, NULL, b2_buf, sizeof(b2_buf), &b2))
-		{
-			vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b2_name);
-			return 0;
-		}
-
-		vl_log(VL_DEBUG, "b1_name = '%s', b1 = %d\n", b1_name, b1);
-		vl_log(VL_DEBUG, "b2_name = '%s', b2 = %d\n", b2_name, b2);
-
-		// compare real bool values now
-		bool final_result = b1 == b2;
-		vl_log(VL_DEBUG, "final_result = %d\n", final_result);
-
-		// insert result into correct buffer
-		if(sbuffer)
-		{
-			if(final_result)
-				snaky_strcpy(sbuffer, "TRUE");
-			else
-				snaky_strcpy(sbuffer, "FALSE");
-		}
-		else if(buffer && buffer_size > 0)
-		{
-			if(final_result)
-				snprintf(buffer, buffer_size, "TRUE");
-			else
-				snprintf(buffer, buffer_size, "FALSE");
-		}
+		insert_bool_value(use_not_expr ? b1 != b2 : b1 == b2, sbuffer, buffer, buffer_size);
 
 		return 1;
 	}
-	else // otherwise, parse it as a lone bool value
+	else if(strncmp(str, " AND ", 5) == 0)
 	{
-		// example: bool_2 = bool_1 (in this case, 'bool_1' will be parsed, which is another expression, so parse_bool_expression(...) will be called again):
+		// move past the AND keyword
+		str += 5;
 
-		char value[SNAKY_BUF_SIZE + 1];
-		if(snaky_parse_target_attrib_buf(str_origin, value, sizeof(value), expr, NULL, NULL))
-		{
-			int s = 0;
-			bool b = snaky_parse_bool(value, &s);
-			if(out_bool_value)
-				*out_bool_value = b;
-			if(!s)
-			{
-				// try to parse as another bool expression
-				int be = parse_bool_expression(str_origin, value, sbuffer, buffer, buffer_size, out_bool_value);
-				if(be)
-					return 1;
-				else
-				{
-					vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", value);
-					return 0;
-				}
-			}
+		bool b1 = false, b2 = false;
+		if(!parse_bool_terms(str_origin, str, b1_name, sbuffer, buffer, buffer_size, &b1, &b2))
+			return 0;
 
-			// re-insert real bool value into the given buffer
-			if(sbuffer)
-				snaky_strcpy(sbuffer, value);
-			else if(buffer && buffer_size > 0)
-				snprintf(buffer, buffer_size, "%s", value);
+		insert_bool_value(b1 && b2, sbuffer, buffer, buffer_size);
 
-			return 1;
-		}
+		return 1;
+	}
+	else if(strncmp(str, " OR ", 4) == 0)
+	{
+		// move past the OR keyword
+		str += 4;
 
-		// see if it was 'TRUE' 'FALSE' 'ON' or 'OFF'
+		bool b1 = false, b2 = false;
+		if(!parse_bool_terms(str_origin, str, b1_name, sbuffer, buffer, buffer_size, &b1, &b2))
+			return 0;
+
+		insert_bool_value(b1 || b2, sbuffer, buffer, buffer_size);
+
+		return 1;
+	}
+	else
+		// no logical expression found, parse a simple bool expression
+		return parse_bool_simple_expression(str_origin, expr, sbuffer, buffer, buffer_size, out_bool_value);
+}
+static int parse_bool_simple_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value)
+{
+	const char *str = expr;
+
+	// example: bool_2 = bool_1 (in this case, 'bool_1' will be parsed, which is another expression, so parse_bool_logic_expression(...) will be called again):
+
+	char value[SNAKY_BUF_SIZE + 1];
+	if(snaky_parse_target_attrib_buf(str_origin, expr, value, sizeof(value), NULL, NULL))
+	{
 		int s = 0;
-		bool b = snaky_parse_bool(b1_name, &s);
+		bool b = snaky_parse_bool(value, &s);
 		if(out_bool_value)
 			*out_bool_value = b;
 		if(!s)
 		{
-			int be = parse_bool_expression(str_origin, b1_name, sbuffer, buffer, buffer_size, out_bool_value);
+			// try to parse as another bool expression
+			int be = parse_bool_simple_expression(str_origin, value, sbuffer, buffer, buffer_size, out_bool_value);
 			if(be)
 				return 1;
 			else
 			{
-				vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b1_name);
+				vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", value);
 				return 0;
 			}
+		}
+
+		// re-insert real bool value into the given buffer
+		if(sbuffer)
+			snaky_strcpy(sbuffer, value);
+		else if(buffer && buffer_size > 0)
+			snprintf(buffer, buffer_size, "%s", value);
+
+		return 1;
+	}
+
+	// see if it was 'TRUE' 'FALSE' 'ON' or 'OFF'
+	int s = 0;
+	bool b = snaky_parse_bool(expr, &s);
+	if(out_bool_value)
+		*out_bool_value = b;
+	if(!s)
+	{
+		int be = parse_bool_simple_expression(str_origin, expr, sbuffer, buffer, buffer_size, out_bool_value);
+		if(be)
+			return 1;
+		else
+		{
+			vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", expr);
+			return 0;
 		}
 	}
 
@@ -635,7 +682,7 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 
 	// see if the value parsed is a bool reference (ex. bool_2 = bool_1) or expression (ex. bool_2 = bool_1 IS FALSE)
 	const char *expr = sbuffer ? sbuffer->data : buffer;
-	if(parse_bool_expression(str_origin, expr, sbuffer, buffer, buffer_size, NULL))
+	if(parse_bool_logic_expression(str_origin, expr, sbuffer, buffer, buffer_size, NULL))
 		return 1;
 
 	return 1;
@@ -689,7 +736,7 @@ static int parse_target_attrib(const char *str_origin, const char *attribs_start
 	// if not a nested string, copy the attrib value normally (no end_pos_fn for a normal value)
 	return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_start_pos, true, NULL);
 }
-static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type)
+static int prepare_parse_target_attrib(const char *str, const char *attrib_name, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
 {
 	const char *str_origin = str;
 
@@ -761,7 +808,7 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 	{
 		if(sbuffer)
 		{
-			if(!snaky_parse_target_attrib_str(str, sbuffer, substrings[s], out_start_pos, out_data_type))
+			if(!snaky_parse_target_attrib_str(str, substrings[s], sbuffer, out_start_pos, out_data_type))
 			{
 				vl_log(VL_ERROR, "Failed to parse substring attribute: '%s' in string '%s'\n", substrings[s], str);
 				return 0;
@@ -769,7 +816,7 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 		}
 		else if(buffer && buffer_size > 0)
 		{
-			if(!snaky_parse_target_attrib_buf(str, buffer, buffer_size, substrings[s], out_start_pos, out_data_type))
+			if(!snaky_parse_target_attrib_buf(str, substrings[s], buffer, buffer_size, out_start_pos, out_data_type))
 			{
 				vl_log(VL_ERROR, "Failed to parse substring attribute: '%s' in string '%s'\n", substrings[s], str);
 				return 0;
@@ -883,7 +930,7 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 	// see if resolved attrib name is invalid (starts with number of symbol)
 	if(!isalpha(*attrib_name))
 	{
-		vl_log(VL_ERROR, "Argument name cannot start with a symbol or number: '%s'!\n", attrib_name);
+		vl_log(VL_ERROR, "Attribute name cannot start with a symbol or number: '%s'!\n", attrib_name);
 		return 0;
 	}
 
@@ -961,13 +1008,13 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 
 	return 0;
 }
-int snaky_parse_target_attrib_buf(const char *str, char *buffer, size_t buffer_size, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type)
+int snaky_parse_target_attrib_buf(const char *str, const char *attrib_name, char *buffer, size_t buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
 {
-	return prepare_parse_target_attrib(str, NULL, buffer, buffer_size, attrib_name, out_start_pos, out_data_type);
+	return prepare_parse_target_attrib(str, attrib_name, NULL, buffer, buffer_size, out_start_pos, out_data_type);
 }
-int snaky_parse_target_attrib_str(const char *str, snaky_string *buffer, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type)
+int snaky_parse_target_attrib_str(const char *str, const char *attrib_name, snaky_string *buffer, const char **out_start_pos, snaky_data_type *out_data_type)
 {
-	return prepare_parse_target_attrib(str, buffer, NULL, 0, attrib_name, out_start_pos, out_data_type);
+	return prepare_parse_target_attrib(str, attrib_name, buffer, NULL, 0, out_start_pos, out_data_type);
 }
 
 static int parse_attrib(const char *str_origin, const char *attribs_start, snaky_string *name_str, snaky_string *value_str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
@@ -1216,7 +1263,7 @@ int snaky_remove_attrib_buf(char *str, const char *attrib_name)
 	// see if the attrib is found
 	const char *start_pos = NULL;
 	char attrib_value[SNAKY_BUF_SIZE + 1];
-	if(!snaky_parse_target_attrib_buf(str, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
+	if(!snaky_parse_target_attrib_buf(str, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
 	{
 		vl_log(VL_ERROR, "The '%s' attribute was not found in this string: '%s'!\n", attrib_name, str);
 		return 0;
@@ -1257,7 +1304,7 @@ int snaky_remove_attrib_str(snaky_string *str, const char *attrib_name)
 	// see if the attrib is found
 	const char *start_pos = NULL;
 	char attrib_value[SNAKY_BUF_SIZE + 1];
-	if(!snaky_parse_target_attrib_buf(str->data, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
+	if(!snaky_parse_target_attrib_buf(str->data, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
 	{
 		vl_log(VL_ERROR, "The '%s' attribute was not found in this string: '%s'!\n", attrib_name, str);
 		return 0;
@@ -1309,7 +1356,7 @@ int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name,
 	const char *start_pos = NULL;
 
 	char attrib_value[SNAKY_BUF_SIZE + 1];
-	if(snaky_parse_target_attrib_buf(buf, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
+	if(snaky_parse_target_attrib_buf(buf, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
 	{
 		edit_pos = (char*) start_pos;
 		// curr_len is equal to length of the found attribute value
@@ -1444,7 +1491,7 @@ int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char 
 	const char *start_pos = NULL;
 
 	char attrib_value[SNAKY_BUF_SIZE + 1];
-	if(snaky_parse_target_attrib_buf(str->data, attrib_value, sizeof(attrib_value), attrib_name, &start_pos, NULL))
+	if(snaky_parse_target_attrib_buf(str->data, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
 	{
 		edit_pos = (char*) start_pos;
 		// curr_len is equal to length of the found attribute value
@@ -2031,7 +2078,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 		// try to parse as a target attribute:
 		char attrib[SNAKY_BUF_SIZE + 1];
 		snaky_data_type data_type = SNAKY_INVALID;
-		if(snaky_parse_target_attrib_buf(origin, attrib, sizeof(attrib), attrib_name, NULL, &data_type))
+		if(snaky_parse_target_attrib_buf(origin, attrib_name, attrib, sizeof(attrib), NULL, &data_type))
 		{
 			// if the attrib is an invalid type, no value can be parsed
 			if(data_type == SNAKY_ARRAY)
@@ -2374,7 +2421,7 @@ void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, s
 		return;
 
 	snaky_data_type resolved_type = SNAKY_INVALID;
-	if(snaky_parse_target_attrib_str(str, &attrib, attrib_name, out_start_pos, &resolved_type))
+	if(snaky_parse_target_attrib_str(str, attrib_name, &attrib, out_start_pos, &resolved_type))
 	{
 		if(resolved_type == SNAKY_INVALID)
 			resolved_type = target_type;

@@ -386,11 +386,11 @@ SNAKY_API int snaky_realloc_str(snaky_string *str, size_t bytes);
   be chained, like this 'v1.v2.v3...'
 
   @param str The string to search.
+  @param attrib_name The name of the attribute to search for.
   @param buffer Where to place the value of the found attribute.
   If this is NULL, then the function will only return
   whether or not the attribute was found.
   @param buffer_size The size of 'buffer' in bytes.
-  @param attrib_name The name of the attribute to search for.
   @param out_start_pos A pointer to a const char*. If a valid pointer
   is given, it will be equal to the position in the original
   string where the next attribute starts. Specifically, it will point
@@ -402,7 +402,7 @@ SNAKY_API int snaky_realloc_str(snaky_string *str, size_t bytes);
   @return 1 if the attribute was successfully parsed/found, 0 if the
   function fails in any way.
 */
-SNAKY_API int snaky_parse_target_attrib_buf(const char *str, char *buffer, size_t buffer_size, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_target_attrib_buf(const char *str, const char *attrib_name, char *buffer, size_t buffer_size, const char **out_start_pos, snaky_data_type *out_data_type);
 /**
   Same as snaky_parse_target_attrib(...) but uses a snaky_string instead
   of a char buffer.
@@ -411,7 +411,7 @@ SNAKY_API int snaky_parse_target_attrib_buf(const char *str, char *buffer, size_
 
   @see snaky_parse_target_attrib_buf(const char*, char*, size_t, const char*, const char**, snaky_data_type*)
 */
-SNAKY_API int snaky_parse_target_attrib_str(const char *str, snaky_string *buffer, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_target_attrib_str(const char *str, const char *attrib_name, snaky_string *buffer, const char **out_start_pos, snaky_data_type *out_data_type);
 /**
   Searches the given string for the very next attribute and tries to parse its value.
 
