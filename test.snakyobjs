@@ -1,2 +1,1 @@
-< init = TRUE, light = ? init | ON | OFF >
-< player = {max_hp = 100, hp = max_hp, pos = {<x = 0, y = x>}}>
+<icon_str = {<id = PENCIL>HELLO<id = PEN>}>

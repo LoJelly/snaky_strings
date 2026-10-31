@@ -111,6 +111,7 @@ Macros</h2></td></tr>
 <tr class="memitem:a26ce81d4b8ca3d84c65135bf4fb3bebe" id="r_a26ce81d4b8ca3d84c65135bf4fb3bebe"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a26ce81d4b8ca3d84c65135bf4fb3bebe">SNAKY_BUF_SIZE</a>&#160;&#160;&#160;64</td></tr>
 <tr class="memitem:acf41459d0a61383a0a8cd68c1a1d830d" id="r_acf41459d0a61383a0a8cd68c1a1d830d"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#acf41459d0a61383a0a8cd68c1a1d830d">SNAKY_MAX_LINE_LEN</a>&#160;&#160;&#160;256</td></tr>
 <tr class="memitem:a67afa252790605eabe2690bb04c449a7" id="r_a67afa252790605eabe2690bb04c449a7"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a67afa252790605eabe2690bb04c449a7">SNAKY_INVALID_VALUE</a>&#160;&#160;&#160;-1</td></tr>
+<tr class="memitem:a495d602d98ef0b8e75148262d236f131" id="r_a495d602d98ef0b8e75148262d236f131"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a495d602d98ef0b8e75148262d236f131">SNAKY_MAX_SUBSTRINGS</a>&#160;&#160;&#160;32</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-typedef-members" class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
@@ -261,6 +262,23 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a495d602d98ef0b8e75148262d236f131" name="a495d602d98ef0b8e75148262d236f131"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a495d602d98ef0b8e75148262d236f131">&#9670;&#160;</a></span>SNAKY_MAX_SUBSTRINGS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define SNAKY_MAX_SUBSTRINGS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>When trying to parse a target attribute using nested attributes, such as "obj.a.b", the max number of substrings allowed is equal to this value. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00062">62</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+
+</div>
+</div>
 <a name="doc-typedef-members" id="doc-typedef-members"></a><h2 id="header-doc-typedef-members" class="groupheader">Typedef Documentation</h2>
 <a id="a75b5bb0632db5ecb7be105b06b7c257e" name="a75b5bb0632db5ecb7be105b06b7c257e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a75b5bb0632db5ecb7be105b06b7c257e">&#9670;&#160;</a></span>snaky_attrib_entry</h2>
@@ -339,7 +357,7 @@ Functions</h2></td></tr>
 <p>Single-argument functions that are evaluated in attribute strings.</p>
 <p>They should take in a single float value, and return a single float value. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00792">792</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00799">799</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>
@@ -408,26 +426,26 @@ Functions</h2></td></tr>
 </td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00121">121</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
-<div class="fragment"><div class="line"><span class="lineno">  122</span>{</div>
-<div class="line"><span class="lineno">  126</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3ba15e8be7bba6032ecf519610c260a8f05">SNAKY_CHAR</a>,</div>
-<div class="line"><span class="lineno">  130</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3ba5a48640d3210013cddbbe54ac72c7bce">SNAKY_BOOL</a>,</div>
-<div class="line"><span class="lineno">  134</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35">SNAKY_INT</a>,</div>
-<div class="line"><span class="lineno">  138</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3baf95331d639c52bd68d78f751ef9d4076">SNAKY_FLOAT</a>,</div>
-<div class="line"><span class="lineno">  142</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3ba6ae3d3319899afd1ed93ae5378099e41">SNAKY_DOUBLE</a>,</div>
-<div class="line"><span class="lineno">  146</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3ba3e0eac9716de3dd625e843ccc0986d45">SNAKY_ARRAY</a>,</div>
-<div class="line"><span class="lineno">  150</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3ba91a38b118331d4faaee17f97c925cced">SNAKY_OBJECT</a>,</div>
-<div class="line"><span class="lineno">  157</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3bae285018080e00a6675669d012eac782b">SNAKY_STRING</a></div>
-<div class="line"><span class="lineno">  158</span>} <a class="code hl_enumeration" href="#a928561b306efa10e97e0b0879ae8fe3b">snaky_data_type</a>;</div>
-<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3b"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3b">snaky_data_type</a></div><div class="ttdeci">snaky_data_type</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00121">snaky_strings.h:122</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3ba15e8be7bba6032ecf519610c260a8f05"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3ba15e8be7bba6032ecf519610c260a8f05">SNAKY_CHAR</a></div><div class="ttdeci">@ SNAKY_CHAR</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00126">snaky_strings.h:126</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3ba3e0eac9716de3dd625e843ccc0986d45"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3ba3e0eac9716de3dd625e843ccc0986d45">SNAKY_ARRAY</a></div><div class="ttdeci">@ SNAKY_ARRAY</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00146">snaky_strings.h:146</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3ba5a48640d3210013cddbbe54ac72c7bce"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3ba5a48640d3210013cddbbe54ac72c7bce">SNAKY_BOOL</a></div><div class="ttdeci">@ SNAKY_BOOL</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00130">snaky_strings.h:130</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3ba6ae3d3319899afd1ed93ae5378099e41"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3ba6ae3d3319899afd1ed93ae5378099e41">SNAKY_DOUBLE</a></div><div class="ttdeci">@ SNAKY_DOUBLE</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00142">snaky_strings.h:142</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3ba91a38b118331d4faaee17f97c925cced"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3ba91a38b118331d4faaee17f97c925cced">SNAKY_OBJECT</a></div><div class="ttdeci">@ SNAKY_OBJECT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00150">snaky_strings.h:150</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35">SNAKY_INT</a></div><div class="ttdeci">@ SNAKY_INT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00134">snaky_strings.h:134</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3bae285018080e00a6675669d012eac782b"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3bae285018080e00a6675669d012eac782b">SNAKY_STRING</a></div><div class="ttdeci">@ SNAKY_STRING</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00157">snaky_strings.h:157</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3baf95331d639c52bd68d78f751ef9d4076"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3baf95331d639c52bd68d78f751ef9d4076">SNAKY_FLOAT</a></div><div class="ttdeci">@ SNAKY_FLOAT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00138">snaky_strings.h:138</a></div></div>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00128">128</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<div class="fragment"><div class="line"><span class="lineno">  129</span>{</div>
+<div class="line"><span class="lineno">  133</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3ba15e8be7bba6032ecf519610c260a8f05">SNAKY_CHAR</a>,</div>
+<div class="line"><span class="lineno">  137</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3ba5a48640d3210013cddbbe54ac72c7bce">SNAKY_BOOL</a>,</div>
+<div class="line"><span class="lineno">  141</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35">SNAKY_INT</a>,</div>
+<div class="line"><span class="lineno">  145</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3baf95331d639c52bd68d78f751ef9d4076">SNAKY_FLOAT</a>,</div>
+<div class="line"><span class="lineno">  149</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3ba6ae3d3319899afd1ed93ae5378099e41">SNAKY_DOUBLE</a>,</div>
+<div class="line"><span class="lineno">  153</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3ba3e0eac9716de3dd625e843ccc0986d45">SNAKY_ARRAY</a>,</div>
+<div class="line"><span class="lineno">  157</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3ba91a38b118331d4faaee17f97c925cced">SNAKY_OBJECT</a>,</div>
+<div class="line"><span class="lineno">  164</span>    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3bae285018080e00a6675669d012eac782b">SNAKY_STRING</a></div>
+<div class="line"><span class="lineno">  165</span>} <a class="code hl_enumeration" href="#a928561b306efa10e97e0b0879ae8fe3b">snaky_data_type</a>;</div>
+<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3b"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3b">snaky_data_type</a></div><div class="ttdeci">snaky_data_type</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00128">snaky_strings.h:129</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3ba15e8be7bba6032ecf519610c260a8f05"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3ba15e8be7bba6032ecf519610c260a8f05">SNAKY_CHAR</a></div><div class="ttdeci">@ SNAKY_CHAR</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00133">snaky_strings.h:133</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3ba3e0eac9716de3dd625e843ccc0986d45"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3ba3e0eac9716de3dd625e843ccc0986d45">SNAKY_ARRAY</a></div><div class="ttdeci">@ SNAKY_ARRAY</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00153">snaky_strings.h:153</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3ba5a48640d3210013cddbbe54ac72c7bce"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3ba5a48640d3210013cddbbe54ac72c7bce">SNAKY_BOOL</a></div><div class="ttdeci">@ SNAKY_BOOL</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00137">snaky_strings.h:137</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3ba6ae3d3319899afd1ed93ae5378099e41"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3ba6ae3d3319899afd1ed93ae5378099e41">SNAKY_DOUBLE</a></div><div class="ttdeci">@ SNAKY_DOUBLE</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00149">snaky_strings.h:149</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3ba91a38b118331d4faaee17f97c925cced"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3ba91a38b118331d4faaee17f97c925cced">SNAKY_OBJECT</a></div><div class="ttdeci">@ SNAKY_OBJECT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00157">snaky_strings.h:157</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35">SNAKY_INT</a></div><div class="ttdeci">@ SNAKY_INT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00141">snaky_strings.h:141</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3bae285018080e00a6675669d012eac782b"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3bae285018080e00a6675669d012eac782b">SNAKY_STRING</a></div><div class="ttdeci">@ SNAKY_STRING</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00164">snaky_strings.h:164</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a928561b306efa10e97e0b0879ae8fe3baf95331d639c52bd68d78f751ef9d4076"><div class="ttname"><a href="#a928561b306efa10e97e0b0879ae8fe3baf95331d639c52bd68d78f751ef9d4076">SNAKY_FLOAT</a></div><div class="ttdeci">@ SNAKY_FLOAT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00145">snaky_strings.h:145</a></div></div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -454,16 +472,16 @@ Functions</h2></td></tr>
 </td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00222">222</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
-<div class="fragment"><div class="line"><span class="lineno">  223</span>{</div>
-<div class="line"><span class="lineno">  230</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3">SNAKY_FWRITE_BINARY</a>,</div>
-<div class="line"><span class="lineno">  251</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb">SNAKY_FWRITE_TEXT</a>,</div>
-<div class="line"><span class="lineno">  257</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af">SNAKY_FWRITE_ENCRYPT</a></div>
-<div class="line"><span class="lineno">  258</span>} <a class="code hl_enumeration" href="#a8117c407ffac2f119d28e31781ccf823">snaky_fwrite_mode</a>;</div>
-<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823">snaky_fwrite_mode</a></div><div class="ttdeci">snaky_fwrite_mode</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00222">snaky_strings.h:223</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3">SNAKY_FWRITE_BINARY</a></div><div class="ttdeci">@ SNAKY_FWRITE_BINARY</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00230">snaky_strings.h:230</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb">SNAKY_FWRITE_TEXT</a></div><div class="ttdeci">@ SNAKY_FWRITE_TEXT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00251">snaky_strings.h:251</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af">SNAKY_FWRITE_ENCRYPT</a></div><div class="ttdeci">@ SNAKY_FWRITE_ENCRYPT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00257">snaky_strings.h:257</a></div></div>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00229">229</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<div class="fragment"><div class="line"><span class="lineno">  230</span>{</div>
+<div class="line"><span class="lineno">  237</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3">SNAKY_FWRITE_BINARY</a>,</div>
+<div class="line"><span class="lineno">  258</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb">SNAKY_FWRITE_TEXT</a>,</div>
+<div class="line"><span class="lineno">  264</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af">SNAKY_FWRITE_ENCRYPT</a></div>
+<div class="line"><span class="lineno">  265</span>} <a class="code hl_enumeration" href="#a8117c407ffac2f119d28e31781ccf823">snaky_fwrite_mode</a>;</div>
+<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823">snaky_fwrite_mode</a></div><div class="ttdeci">snaky_fwrite_mode</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00229">snaky_strings.h:230</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3">SNAKY_FWRITE_BINARY</a></div><div class="ttdeci">@ SNAKY_FWRITE_BINARY</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00237">snaky_strings.h:237</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb">SNAKY_FWRITE_TEXT</a></div><div class="ttdeci">@ SNAKY_FWRITE_TEXT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00258">snaky_strings.h:258</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af">SNAKY_FWRITE_ENCRYPT</a></div><div class="ttdeci">@ SNAKY_FWRITE_ENCRYPT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00264">snaky_strings.h:264</a></div></div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -1336,7 +1354,7 @@ Valid boolean attribute include: 'TRUE,' 'ON,' 'FALSE,' and 'OFF.'</dd></dl>
 </div><div class="memdoc">
 <p>Same as snaky_parse_target_attrib(...) but uses a <a class="el" href="../../da/d8e/structsnaky__string.html">snaky_string</a> instead of a char buffer.</p>
 <dl class="section return"><dt>Returns</dt><dd>1 on success, 0 on failure.</dd></dl>
-<dl class="section see"><dt>See also</dt><dd>snaky_parse_target_attrib(const char*, char*, size_t, const char*, const char**, snaky_data_type*) </dd></dl>
+<dl class="section see"><dt>See also</dt><dd><a class="el" href="#a96e4b0534f39bf363110a14885793922">snaky_parse_target_attrib_buf(const char*, char*, size_t, const char*, const char**, snaky_data_type*)</a> </dd></dl>
 
 <p class="reference">References <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00014">SNAKY_API</a>.</p>
 

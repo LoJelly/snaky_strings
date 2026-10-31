@@ -742,27 +742,92 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 		return 0;
 
 	// see if user is trying to find a nested attribute :
+	char substrings[SNAKY_MAX_SUBSTRINGS][SNAKY_BUF_SIZE + 1] = {0};
+	int num_substrings = 0;
 
-	// the resolved attrib name is the final attribute name after the last '.' character in the original attribute name string
-	const char *resolved_attrib_name = attrib_name;
-	size_t resolved_attrib_len = 0;
-	// TODO instead of finding the last attribute name in the string, separate the string into multiple sub-strings using the '.' character as the delimiter, then, as you search the string, find each substring, then the next one, and repeat until the last one is found. that way, the actual target attrib will be found
-	size_t last_nested_attrib_pos = 0;
+	char substring[SNAKY_BUF_SIZE + 1] = {0};
 	int i = 0;
+	bool at_least_one_subfield_found = false;
 	for(const char *p = attrib_name; *p; ++p)
 	{
+		// check for a '.' which means the current substring has ended
 		if(*p == '.')
-			last_nested_attrib_pos = i;
-		i++;
+		{
+			// if no more rows, error out
+			if(num_substrings >= SNAKY_MAX_SUBSTRINGS)
+			{
+				vl_log(VL_ERROR, "Max number of substrings allowed in targeted nested attribute string: '%s'\n", attrib_name);
+				return 0;
+			}
+
+			// end the current substring
+			substring[i] = '\0';
+
+			// otherwise, add the new substring to the array
+			strcpy(substrings[num_substrings++], substring);
+
+			// reset data for next substring
+			i = 0;
+
+			// signal that at least one period was found
+			at_least_one_subfield_found = true;
+
+			continue;
+		}
+
+		// if not on a '.' yet, add the current char to the current substring array
+		substring[i++] = *p;
+
+		// if the next char is the null terminator and at least one other field was found, end the last substring
+		if(*(p + 1) == '\0' && at_least_one_subfield_found)
+		{
+			// same logic as for when the '.' is found:
+
+			if(num_substrings >= SNAKY_MAX_SUBSTRINGS)
+			{
+				vl_log(VL_ERROR, "Max number of substrings allowed in targeted nested attribute string: '%s'\n", attrib_name);
+				return 0;
+			}
+
+			substring[i] = '\0';
+
+			strcpy(substrings[num_substrings++], substring);
+
+			i = 0;
+
+			continue;
+		}
 	}
 
-	resolved_attrib_name = last_nested_attrib_pos > 0 ? attrib_name + last_nested_attrib_pos + 1 : attrib_name;
-	if(!*resolved_attrib_name)
+	// now iterate over substring array, and parse each substring as an individual target attribute
+	for(size_t s = 0; s < num_substrings; ++s)
 	{
-		vl_log(VL_ERROR, "Unexpected termination of attribute name: '%s'!\n", attrib_name);
-		return 0;
+		if(sbuffer)
+		{
+			if(!snaky_parse_target_attrib_str(str, sbuffer, substrings[s], out_start_pos, out_data_type))
+			{
+				vl_log(VL_ERROR, "Failed to parse substring attribute: '%s' in string '%s'\n", substrings[s], str);
+				return 0;
+			}
+		}
+		else if(buffer && buffer_size > 0)
+		{
+			if(!snaky_parse_target_attrib_buf(str, buffer, buffer_size, substrings[s], out_start_pos, out_data_type))
+			{
+				vl_log(VL_ERROR, "Failed to parse substring attribute: '%s' in string '%s'\n", substrings[s], str);
+				return 0;
+			}
+		}
 	}
-	resolved_attrib_len = strlen(resolved_attrib_name);
+
+	/*
+	   if num_substrings is > 0 (the for loop above did execute), and the function hasn't returned yet,
+	   then the last nested attribute was parsed successfully
+	   and its value was inserted into the correct buffer (sbuffer or buffer),
+	   which means the function has succeeded, return 1
+	*/
+	if(num_substrings > 0)
+		return 1;
 
 	// see if user searching for a value within an array (requires '[N]' in 'attrib_name')
 	char index_value[SNAKY_BUF_SIZE + 1] = {0};
@@ -817,7 +882,7 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 		// now find the array in the attribute string, go to the specific index, and parse the value there
 		for(const char *p = str; *p; ++p)
 		{
-			if(strncmp(p, resolved_attrib_name, actual_array_name_len) == 0)
+			if(strncmp(p, attrib_name, actual_array_name_len) == 0)
 			{
 				// jump to the character right after the '['
 				while(*p && *p != '[')
@@ -859,9 +924,9 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 	}
 
 	// see if resolved attrib name is invalid (starts with number of symbol)
-	if(!isalpha(*resolved_attrib_name))
+	if(!isalpha(*attrib_name))
 	{
-		vl_log(VL_ERROR, "Argument name cannot start with a symbol or number: '%s'!\n", resolved_attrib_name);
+		vl_log(VL_ERROR, "Argument name cannot start with a symbol or number: '%s'!\n", attrib_name);
 		return 0;
 	}
 
@@ -871,44 +936,6 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 	{
 		// get char
 		char c = *p;
-
-		// if the first char is a group indicator, skip the string entirely (unless user is searching for nested attribute )
-		if(*p == '{')
-		{
-			// if user included a '.' to find a nested attribute, search for that attribute now:
-			if(last_nested_attrib_pos > 0)
-			{
-				// search the rest of the string:
-				while(*p)
-				{
-					const char *attribs_start = p + 1;
-
-					skip_whitespace(&attribs_start, NULL);
-
-					if(!*attribs_start)
-					{
-						vl_log(VL_ERROR, "Unexpected termination of attribute string: '%s'!\n", str);
-						return 0;
-					}
-
-					if(strncmp(attribs_start, resolved_attrib_name, resolved_attrib_len) == 0)
-					{
-						resolve_data_type(attribs_start, out_data_type, NULL);
-						return parse_target_attrib(str_origin, attribs_start, sbuffer, buffer, buffer_size, resolved_attrib_name, resolved_attrib_len, out_start_pos, out_data_type);
-					}
-
-					++p;
-				}
-			}
-
-			if(!*p)
-			{
-				vl_log(VL_ERROR, "Unexpected termination of string: '%s'!\n", str);
-				return 0;
-			}
-
-			continue;
-		}
 
 		// when the first '<' or ',' is encountered, compare attrib to the target arg
 		if(c == '<' && !in_attrib_string)
@@ -962,6 +989,16 @@ static int prepare_parse_target_attrib(const char *str, snaky_string *sbuffer, c
 
 		// exit an attrib string when '>' is found
 		if(c == '>' && in_attrib_string)
+			in_attrib_string = false;
+
+		/*
+		   also exit the current attrib string when an
+		   object is encountered
+
+		   this way, when the next '<' is found for the
+		   object, its fields can be parsed as well
+		*/
+		if(c == '{' && in_attrib_string)
 			in_attrib_string = false;
 	}
 

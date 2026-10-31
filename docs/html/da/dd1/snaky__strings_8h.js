@@ -8,6 +8,7 @@ var snaky__strings_8h =
     [ "SNAKY_BUF_SIZE", "da/dd1/snaky__strings_8h.html#a26ce81d4b8ca3d84c65135bf4fb3bebe", null ],
     [ "SNAKY_INVALID_VALUE", "da/dd1/snaky__strings_8h.html#a67afa252790605eabe2690bb04c449a7", null ],
     [ "SNAKY_MAX_LINE_LEN", "da/dd1/snaky__strings_8h.html#acf41459d0a61383a0a8cd68c1a1d830d", null ],
+    [ "SNAKY_MAX_SUBSTRINGS", "da/dd1/snaky__strings_8h.html#a495d602d98ef0b8e75148262d236f131", null ],
     [ "snaky_attrib_entry", "da/dd1/snaky__strings_8h.html#a75b5bb0632db5ecb7be105b06b7c257e", null ],
     [ "snaky_attrib_list", "da/dd1/snaky__strings_8h.html#a1346730aa3d826391162e9515fe123b0", null ],
     [ "snaky_attrib_map", "da/dd1/snaky__strings_8h.html#a6d3a52688de3d4a3bd5ab129feb27d6d", null ],

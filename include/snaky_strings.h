@@ -55,6 +55,13 @@
 #define SNAKY_INVALID_VALUE -1
 
 /**
+  When trying to parse a target attribute using nested attributes,
+  such as "obj.a.b", the max number of substrings allowed
+  is equal to this value.
+*/
+#define SNAKY_MAX_SUBSTRINGS 32
+
+/**
   Contains string data.
 
   snaky_strings are primarily
@@ -400,7 +407,7 @@ SNAKY_API int snaky_parse_target_attrib_buf(const char *str, char *buffer, size_
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_parse_target_attrib(const char*, char*, size_t, const char*, const char**, snaky_data_type*)
+  @see snaky_parse_target_attrib_buf(const char*, char*, size_t, const char*, const char**, snaky_data_type*)
 */
 SNAKY_API int snaky_parse_target_attrib_str(const char *str, snaky_string *buffer, const char *attrib_name, const char **out_start_pos, snaky_data_type *out_data_type);
 /**
