@@ -455,37 +455,127 @@ static void return_start_pos(const char *attribs_start, const char **out_start_p
 
 static int parse_bool_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value)
 {
-	/*
-	   the expression should be equal to another bool value within the string,
-	   so parse that target attribute, and obtain its real boolean value
-	*/
-	char value[SNAKY_BUF_SIZE + 1];
-	if(snaky_parse_target_attrib_buf(str_origin, value, sizeof(value), expr, NULL, NULL))
+	const char *str = expr;
+
+	// determine if an 'IS' expression is being used:
+	char b1_name[SNAKY_BUF_SIZE + 1];
+	size_t i = 0;
+	while(*str && strncmp(str, " IS ", 4) != 0)
+		b1_name[i++] = *str++;
+	b1_name[i] = '\0';
+	i = 0;
+
+	// TODO check for other expressions, like AND, OR, etc.
+
+	// if no 'IS' keyword was never found, then the logic below will still work for the lone bool value parsed:
+
+	// to determine if the 'IS' keyword was found, just compare 'b1_name' to 'expr', if they're equal, no 'IS' keyword was found
+	bool is_keyword_found = strcmp(b1_name, expr) != 0;
+
+	// if the 'IS' keyword was found, now parse the second bool value (TRUE, FALSE, ON, or OFF)
+	if(is_keyword_found)
 	{
+		// move 4 chars ahead to skip " IS " region
+		str += 4;
+
+		// parse second bool value after the 'IS' keyword
+		char b2_name[SNAKY_BUF_SIZE + 1];
+		while(*str && *str != ',' && *str != '>')
+			b2_name[i++] = *str++;
+		b2_name[i] = '\0';
+		i = 0;
+
+		// now get the actual bool values of the attributes
+		bool b1 = false;
+		char b1_buf[SNAKY_BUF_SIZE + 1];
+		if(!parse_bool_expression(str_origin, b1_name, NULL, b1_buf, sizeof(b1_buf), &b1))
+		{
+			vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b1_name);
+			return 0;
+		}
+
+		bool b2 = false;
+		char b2_buf[SNAKY_BUF_SIZE + 1];
+		if(!parse_bool_expression(str_origin, b2_name, NULL, b2_buf, sizeof(b2_buf), &b2))
+		{
+			vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b2_name);
+			return 0;
+		}
+
+		vl_log(VL_DEBUG, "b1_name = '%s', b1 = %d\n", b1_name, b1);
+		vl_log(VL_DEBUG, "b2_name = '%s', b2 = %d\n", b2_name, b2);
+
+		// compare real bool values now
+		bool final_result = b1 == b2;
+		vl_log(VL_DEBUG, "final_result = %d\n", final_result);
+
+		// insert result into correct buffer
+		if(sbuffer)
+		{
+			if(final_result)
+				snaky_strcpy(sbuffer, "TRUE");
+			else
+				snaky_strcpy(sbuffer, "FALSE");
+		}
+		else if(buffer && buffer_size > 0)
+		{
+			if(final_result)
+				snprintf(buffer, buffer_size, "TRUE");
+			else
+				snprintf(buffer, buffer_size, "FALSE");
+		}
+
+		return 1;
+	}
+	else // otherwise, parse it as a lone bool value
+	{
+		// example: bool_2 = bool_1 (in this case, 'bool_1' will be parsed, which is another expression, so parse_bool_expression(...) will be called again):
+
+		char value[SNAKY_BUF_SIZE + 1];
+		if(snaky_parse_target_attrib_buf(str_origin, value, sizeof(value), expr, NULL, NULL))
+		{
+			int s = 0;
+			bool b = snaky_parse_bool(value, &s);
+			if(out_bool_value)
+				*out_bool_value = b;
+			if(!s)
+			{
+				// try to parse as another bool expression
+				int be = parse_bool_expression(str_origin, value, sbuffer, buffer, buffer_size, out_bool_value);
+				if(be)
+					return 1;
+				else
+				{
+					vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", value);
+					return 0;
+				}
+			}
+
+			// re-insert real bool value into the given buffer
+			if(sbuffer)
+				snaky_strcpy(sbuffer, value);
+			else if(buffer && buffer_size > 0)
+				snprintf(buffer, buffer_size, "%s", value);
+
+			return 1;
+		}
+
+		// see if it was 'TRUE' 'FALSE' 'ON' or 'OFF'
 		int s = 0;
-		bool b = snaky_parse_bool(value, &s);
+		bool b = snaky_parse_bool(b1_name, &s);
 		if(out_bool_value)
 			*out_bool_value = b;
 		if(!s)
 		{
-			// try to parse as another bool expression?
-			int be = parse_bool_expression(str_origin, value, sbuffer, buffer, buffer_size, out_bool_value);
+			int be = parse_bool_expression(str_origin, b1_name, sbuffer, buffer, buffer_size, out_bool_value);
 			if(be)
 				return 1;
 			else
 			{
-				vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", value);
+				vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b1_name);
 				return 0;
 			}
 		}
-
-		// re-insert real bool value into the given buffer
-		if(sbuffer)
-			snaky_strcpy(sbuffer, value);
-		else if(buffer && buffer_size > 0)
-			snprintf(buffer, buffer_size, "%s", value);
-
-		return 1;
 	}
 
 	return 1;
@@ -543,142 +633,7 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 
 	return_start_pos(value_start, out_start_pos);
 
-	/*
-	   check to see if the value of the attribute is a boolean expression
-
-	   example:
-	   <
-			bool = TRUE,
-			bool2 = ? bool -> TRUE -> FALSE
-	   >
-	*/
-
-	const char *value_str = NULL;
-	if(sbuffer)
-		value_str = sbuffer->data;
-	else if(buffer && buffer_size > 0)
-		value_str = buffer;
-	else
-		return 0;
-
-	i = 0;
-	for(const char *p = value_str; *p && *p != ',' && *p != '>'; ++p)
-	{
-		skip_whitespace(&p, NULL);
-
-		// see if a '?' operator was used
-		if(*p == '?')
-		{
-			// skip the '?'
-			++p;
-			skip_whitespace(&p, NULL);
-
-			// get the boolean's name
-			char bool_name[SNAKY_BUF_SIZE + 1];
-			while(*p && *p != ' ')
-				bool_name[i++] = *(p++);
-			bool_name[i] = '\0';
-
-			if(!*p)
-			{
-				vl_log(VL_ERROR, "Unexpected termination of string after '?' operator: '%s'!\n", str_origin);
-				return 0;
-			}
-
-			// now try to parse that boolean value
-			char bool_value[SNAKY_BUF_SIZE + 1];
-			if(snaky_parse_target_attrib_buf(str_origin, bool_value, sizeof(bool_value), bool_name, NULL, NULL))
-			{
-				// try to parse the bool as a bool expression
-				bool b = false;
-				char new_bool_value[SNAKY_BUF_SIZE + 1];
-				if(!parse_bool_expression(str_origin, bool_value, NULL, new_bool_value, sizeof(new_bool_value), &b))
-					return 0;
-
-				// now parse the options after the first and second '|' parts of the expression
-
-				// move to the first '|'
-				while(*p && *p != '|')
-					p++;
-
-				if(!*p)
-				{
-					vl_log(VL_ERROR, "Expected '|' after '?' operator: '%s'!\n", str_origin);
-					return 0;
-				}
-
-				// now 'p' points to the first '|' character:
-
-				// buffer to hold the final parsed option
-				char resolved_opt[SNAKY_BUF_SIZE + 1];
-
-				// if the bool was true, parse the first option
-				if(b)
-				{
-					// skip the first '|'
-					p++;
-					skip_whitespace(&p, NULL);
-
-					// parse the next string
-					i = 0;
-					while(*p && *p != ' ')
-						resolved_opt[i++] = *(p++);
-					resolved_opt[i] = '\0';
-
-					if(!*p)
-					{
-						vl_log(VL_ERROR, "Unexpected termination of string after the first '|' in the boolean expression: '%s'!\n", str_origin);
-						return 0;
-					}
-				}
-				// otherwise, parse the second option
-				else
-				{
-					// since 'p' points to the first '|', go to the second '|'
-					p++;
-
-					while(*p && *p != '|')
-						p++;
-
-					if(!*p)
-					{
-						vl_log(VL_ERROR, "Unexpected termination of string after the second '|' in the boolean expression: '%s'!\n", str_origin);
-						return 0;
-					}
-
-					// now 'p' points to the second '|', skip it
-					p++;
-					skip_whitespace(&p, NULL);
-
-					// parse the next string
-					i = 0;
-					while(*p && *p != ' ' && *p != ',' && *p != '>')
-						resolved_opt[i++] = *(p++);
-					resolved_opt[i] = '\0';
-
-					if(!*p)
-					{
-						vl_log(VL_ERROR, "Unexpected termination of string after the second '|' in the boolean expression: '%s'!\n", str_origin);
-						return 0;
-					}
-				}
-
-				// now replace 'buffer' or 'sbuffer' with the new 'resolved_opt' string
-				if(sbuffer)
-					snaky_strcpy(sbuffer, resolved_opt);
-				else if(buffer && buffer_size > 0)
-					snprintf(buffer, buffer_size, "%s", resolved_opt);
-
-				// now see if the option was a bool as well
-				return parse_bool_expression(str_origin, resolved_opt, sbuffer, buffer, buffer_size, NULL);
-			}
-
-			vl_log(VL_ERROR, "Failed to parse boolean value using the given attribute name '%s' after the '?' operator!\n", bool_name);
-			return 0;
-		}
-	}
-
-	// see if the value parsed is a bool reference (counted as an expression)
+	// see if the value parsed is a bool reference (ex. bool_2 = bool_1) or expression (ex. bool_2 = bool_1 IS FALSE)
 	const char *expr = sbuffer ? sbuffer->data : buffer;
 	if(parse_bool_expression(str_origin, expr, sbuffer, buffer, buffer_size, NULL))
 		return 1;
