@@ -506,7 +506,7 @@ static void insert_bool_value(bool value, snaky_string *sbuffer, char *buffer, s
 			snprintf(buffer, buffer_size, "FALSE");
 	}
 }
-static int parse_bool_simple_expression(const char*, const char*, snaky_string*, char*, size_t, bool*);
+static int parse_bool_simple_expression(const char*, const char*, snaky_string*, char*, size_t, bool*, bool);
 // parse logical bool expressions (keywords like IS, AND, and OR)
 static int parse_bool_logic_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value)
 {
@@ -570,10 +570,10 @@ static int parse_bool_logic_expression(const char *str_origin, const char *expr,
 		return 1;
 	}
 	else
-		// no logical expression found, parse a simple bool expression
-		return parse_bool_simple_expression(str_origin, expr, sbuffer, buffer, buffer_size, out_bool_value);
+		// no logical expression found, parse a simple bool expression (do not prevent recursive calls just yet)
+		return parse_bool_simple_expression(str_origin, expr, sbuffer, buffer, buffer_size, out_bool_value, false);
 }
-static int parse_bool_simple_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value)
+static int parse_bool_simple_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value, bool prevent_recursive_calls)
 {
 	const char *str = expr;
 
@@ -589,7 +589,7 @@ static int parse_bool_simple_expression(const char *str_origin, const char *expr
 		if(!s)
 		{
 			// try to parse as another bool expression
-			int be = parse_bool_simple_expression(str_origin, value, sbuffer, buffer, buffer_size, out_bool_value);
+			int be = parse_bool_simple_expression(str_origin, value, sbuffer, buffer, buffer_size, out_bool_value, false);
 			if(be)
 				return 1;
 			else
@@ -615,7 +615,12 @@ static int parse_bool_simple_expression(const char *str_origin, const char *expr
 		*out_bool_value = b;
 	if(!s)
 	{
-		int be = parse_bool_simple_expression(str_origin, expr, sbuffer, buffer, buffer_size, out_bool_value);
+		// if the value being parsed is not a bool, stop recursively calling this function
+		if(prevent_recursive_calls)
+			return 1;
+
+		// otherwise, try to parse as another boolean expression (but set prevent_recursive_calls to true for this call)
+		int be = parse_bool_simple_expression(str_origin, expr, sbuffer, buffer, buffer_size, out_bool_value, true);
 		if(be)
 			return 1;
 		else
@@ -927,12 +932,12 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		return 0;
 	}
 
-	// see if resolved attrib name is invalid (starts with number of symbol)
+	/*// see if resolved attrib name is invalid (starts with number of symbol)
 	if(!isalpha(*attrib_name))
 	{
 		vl_log(VL_ERROR, "Attribute name cannot start with a symbol or number: '%s'!\n", attrib_name);
 		return 0;
-	}
+	}*/
 
 	bool in_attrib_string = false;
 
