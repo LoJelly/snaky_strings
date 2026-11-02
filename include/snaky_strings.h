@@ -506,7 +506,20 @@ SNAKY_API int snaky_set_attribs_str(snaky_string *str, const char *attribs);
 SNAKY_API size_t snaky_count_attribs(const char *str);
 
 /**
-  Determines if an attribute list is an object/group.
+  Determines if an attribute is a string.
+
+  String attributes must be wrapped
+  around {}, like this:
+
+  "< some_str = {  MY STRING   } >"
+*/
+SNAKY_API bool snaky_is_string(const char *str);
+/**
+  Determines if an attribute is an object.
+
+  Object attributes must be in this format:
+
+  "< my_obj = {< field1 = 0, field2 = 0, ... >}>"
 */
 SNAKY_API bool snaky_is_object(const char *str);
 /**

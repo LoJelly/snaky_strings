@@ -633,6 +633,27 @@ static int parse_bool_simple_expression(const char *str_origin, const char *expr
 
 	return 1;
 }
+static void trim_trailing_whitespace_from_value(snaky_string *sbuffer, char *buffer)
+{
+	// only trim trailing whitespace when the value is not a string (example of a string: "..., str = { some string!!     }"):
+	char *buf = sbuffer ? sbuffer->data : buffer;
+	char *start_of_str = buf;
+	char *end_of_str = buf + strlen(buf) - 1;
+
+	if(*buf == '{' && *(buf + 1) != '<')
+		// do not trim
+		return;
+	
+	// otherwise, trim:
+
+	// walk from end to the start, tracking all whitespace:
+	while(end_of_str != start_of_str && isspace(*end_of_str))
+		end_of_str--;
+
+	// if whitespace was found, the pointers will not be equal
+	if(end_of_str != start_of_str)
+		*(end_of_str + 1) = '\0';
+}
 static int parse_value(const char *str_origin, const char *value_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_start_pos, bool break_on_comma, const char *(*end_pos_fn)(const char*))
 {
 	const char *end_pos = NULL;
@@ -683,6 +704,9 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 		sbuffer->data[i] = '\0';
 	else if(buffer && buffer_size > 0)
 		buffer[i] = '\0';
+
+	// see if trailing whitespace should be removed from value (example: "..., end_value = 827    >")
+	trim_trailing_whitespace_from_value(sbuffer, buffer);
 
 	return_start_pos(value_start, out_start_pos);
 
@@ -751,6 +775,10 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 	if(!str || strlen(str) == 0 || !attrib_name || attrib_len == 0)
 		return 0;
 
+	// see if resolved attrib name is invalid (starts with number of symbol)
+	if(!isalpha(*attrib_name) && !snaky_is_string(attrib_name))
+		return 0;
+
 	// see if user is trying to find a nested attribute :
 	char substrings[SNAKY_MAX_SUBSTRINGS][SNAKY_BUF_SIZE + 1] = {0};
 	int num_substrings = 0;
@@ -760,6 +788,15 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 	bool at_least_one_subfield_found = false;
 	for(const char *p = attrib_name; *p; ++p)
 	{
+		// if a space is found, stop parsing substrings (substrings must be chained together with no whitespace)
+		if(isspace(*p))
+		{
+			// reset all substring data just in case some were already parsed
+			at_least_one_subfield_found = false;
+			num_substrings = 0;
+			break;
+		}
+
 		// check for a '.' which means the current substring has ended
 		if(*p == '.')
 		{
@@ -932,13 +969,6 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 
 		return 0;
 	}
-
-	/*// see if resolved attrib name is invalid (starts with number of symbol)
-	if(!isalpha(*attrib_name))
-	{
-		vl_log(VL_ERROR, "Attribute name cannot start with a symbol or number: '%s'!\n", attrib_name);
-		return 0;
-	}*/
 
 	bool in_attrib_string = false;
 
@@ -1705,9 +1735,33 @@ size_t snaky_count_attribs(const char *str)
 	return count;
 }
 
+bool snaky_is_string(const char *str)
+{
+	if(!str)
+		return false;
+
+	// a string starts with '{' but the next char cannot be '<'
+	bool valid_start = *str == '{' && *(str + 1) != '<';
+
+	// find the matching '}'
+	const char *end_pos = find_end_of_object(str);
+
+	// if all those are true, then it's a string
+	return valid_start && end_pos != NULL;
+}
 bool snaky_is_object(const char *str)
 {
-	return *str && *str == '{';
+	if(!str)
+		return false;
+
+	// ensure string has the correct starting chars
+	bool valid_start = *str && *str == '{' && *(str + 1) == '<';
+
+	// find the matching '}'
+	const char *end_pos = find_end_of_object(str);
+
+	// if all those are true, then it's an object
+	return valid_start && end_pos != NULL;
 }
 bool snaky_is_attrib_string(const char *str)
 {
@@ -2008,6 +2062,14 @@ static float parse_expression(const char *origin, const char **str, int *out_suc
 }
 static float parse_factor(const char *origin, const char **str, int *out_success)
 {
+	// skip any string chars, '{' and whitespace
+	if(snaky_is_string(*str))
+	{
+		// skip the '{'
+		*str += 1;
+		skip_whitespace(str, NULL);
+	}
+
 	// find expression wrapped around '()'
 	char c = peek_next_char(str);
 	if(c == '(')
