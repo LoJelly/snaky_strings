@@ -467,7 +467,6 @@ static int parse_bool_terms(const char *str_origin, const char *str, const char 
 	// now obtain the real bool values and compare using ==:
 
 	bool b1 = false;
-	char b1_buf[SNAKY_BUF_SIZE + 1];
 	if(!parse_bool_logic_expression(str_origin, b1_name, sbuffer, buffer, buffer_size, &b1))
 	{
 		vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b1_name);
@@ -475,7 +474,6 @@ static int parse_bool_terms(const char *str_origin, const char *str, const char 
 	}
 
 	bool b2 = false;
-	char b2_buf[SNAKY_BUF_SIZE + 1];
 	if(!parse_bool_logic_expression(str_origin, b2_name, sbuffer, buffer, buffer_size, &b2))
 	{
 		vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b2_name);
@@ -489,8 +487,11 @@ static int parse_bool_terms(const char *str_origin, const char *str, const char 
 
 	return 1;
 }
-static void insert_bool_value(bool value, snaky_string *sbuffer, char *buffer, size_t buffer_size)
+static void insert_bool_value(bool value, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value)
 {
+	if(out_bool_value)
+		*out_bool_value = value;
+
 	if(sbuffer)
 	{
 		if(value)
@@ -539,7 +540,7 @@ static int parse_bool_logic_expression(const char *str_origin, const char *expr,
 		if(!parse_bool_terms(str_origin, str, b1_name, sbuffer, buffer, buffer_size, &b1, &b2))
 			return 0;
 
-		insert_bool_value(use_not_expr ? b1 != b2 : b1 == b2, sbuffer, buffer, buffer_size);
+		insert_bool_value(use_not_expr ? b1 != b2 : b1 == b2, sbuffer, buffer, buffer_size, out_bool_value);
 
 		return 1;
 	}
@@ -552,7 +553,7 @@ static int parse_bool_logic_expression(const char *str_origin, const char *expr,
 		if(!parse_bool_terms(str_origin, str, b1_name, sbuffer, buffer, buffer_size, &b1, &b2))
 			return 0;
 
-		insert_bool_value(b1 && b2, sbuffer, buffer, buffer_size);
+		insert_bool_value(b1 && b2, sbuffer, buffer, buffer_size, out_bool_value);
 
 		return 1;
 	}
@@ -565,7 +566,7 @@ static int parse_bool_logic_expression(const char *str_origin, const char *expr,
 		if(!parse_bool_terms(str_origin, str, b1_name, sbuffer, buffer, buffer_size, &b1, &b2))
 			return 0;
 
-		insert_bool_value(b1 || b2, sbuffer, buffer, buffer_size);
+		insert_bool_value(b1 || b2, sbuffer, buffer, buffer_size, out_bool_value);
 
 		return 1;
 	}
