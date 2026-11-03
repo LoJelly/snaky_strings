@@ -453,186 +453,6 @@ static void return_start_pos(const char *attribs_start, const char **out_start_p
 	}
 }
 
-static int parse_bool_logic_expression(const char *, const char*, snaky_string*, char*, size_t, bool*);
-static int parse_bool_terms(const char *str_origin, const char *str, const char *b1_name, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_b1, bool *out_b2)
-{
-	// parse the second bool value after the IS keyword
-	char b2_name[SNAKY_BUF_SIZE + 1];
-	size_t i = 0;
-	while(*str && *str != ',' && *str != '>')
-		b2_name[i++] = *str++;
-	b2_name[i] = '\0';
-	i = 0;
-
-	// now obtain the real bool values and compare using ==:
-
-	bool b1 = false;
-	if(!parse_bool_logic_expression(str_origin, b1_name, sbuffer, buffer, buffer_size, &b1))
-	{
-		vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b1_name);
-		return 0;
-	}
-
-	bool b2 = false;
-	if(!parse_bool_logic_expression(str_origin, b2_name, sbuffer, buffer, buffer_size, &b2))
-	{
-		vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", b2_name);
-		return 0;
-	}
-
-	if(out_b1)
-		*out_b1 = b1;
-	if(out_b2)
-		*out_b2 = b2;
-
-	return 1;
-}
-static void insert_bool_value(bool value, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value)
-{
-	if(out_bool_value)
-		*out_bool_value = value;
-
-	if(sbuffer)
-	{
-		if(value)
-			snaky_strcpy(sbuffer, "TRUE");
-		else
-			snaky_strcpy(sbuffer, "FALSE");
-	}
-	else if(buffer && buffer_size > 0)
-	{
-		if(value)
-			snprintf(buffer, buffer_size, "TRUE");
-		else
-			snprintf(buffer, buffer_size, "FALSE");
-	}
-}
-static int parse_bool_simple_expression(const char*, const char*, snaky_string*, char*, size_t, bool*, bool);
-// parse logical bool expressions (keywords like IS, AND, and OR)
-static int parse_bool_logic_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value)
-{
-	const char *str = expr;
-
-	// determine what keywords are being used:
-	char b1_name[SNAKY_BUF_SIZE + 1];
-	size_t i = 0;
-	while(*str && strncmp(str, " IS ", 4) != 0 && strncmp(str, " AND ", 5) != 0 && strncmp(str, " OR ", 4) != 0)
-		b1_name[i++] = *str++;
-	b1_name[i] = '\0';
-	i = 0;
-
-	// now determine which keyword was used
-	if(strncmp(str, " IS ", 4) == 0)
-	{
-		// move past the IS keyword
-		str += 4;
-
-		// the IS keyword can also be accompanied by the NOT keyword
-		bool use_not_expr = false;
-		if(strncmp(str, "NOT ", 4) == 0)
-		{
-			// signal that the != operator should be used instead of ==
-			use_not_expr = true;
-			str += 4;
-		}
-
-		bool b1 = false, b2 = false;
-		if(!parse_bool_terms(str_origin, str, b1_name, sbuffer, buffer, buffer_size, &b1, &b2))
-			return 0;
-
-		insert_bool_value(use_not_expr ? b1 != b2 : b1 == b2, sbuffer, buffer, buffer_size, out_bool_value);
-
-		return 1;
-	}
-	else if(strncmp(str, " AND ", 5) == 0)
-	{
-		// move past the AND keyword
-		str += 5;
-
-		bool b1 = false, b2 = false;
-		if(!parse_bool_terms(str_origin, str, b1_name, sbuffer, buffer, buffer_size, &b1, &b2))
-			return 0;
-
-		insert_bool_value(b1 && b2, sbuffer, buffer, buffer_size, out_bool_value);
-
-		return 1;
-	}
-	else if(strncmp(str, " OR ", 4) == 0)
-	{
-		// move past the OR keyword
-		str += 4;
-
-		bool b1 = false, b2 = false;
-		if(!parse_bool_terms(str_origin, str, b1_name, sbuffer, buffer, buffer_size, &b1, &b2))
-			return 0;
-
-		insert_bool_value(b1 || b2, sbuffer, buffer, buffer_size, out_bool_value);
-
-		return 1;
-	}
-	else
-		// no logical expression found, parse a simple bool expression (do not prevent recursive calls just yet)
-		return parse_bool_simple_expression(str_origin, expr, sbuffer, buffer, buffer_size, out_bool_value, false);
-}
-static int parse_bool_simple_expression(const char *str_origin, const char *expr, snaky_string *sbuffer, char *buffer, size_t buffer_size, bool *out_bool_value, bool prevent_recursive_calls)
-{
-	const char *str = expr;
-
-	// example: bool_2 = bool_1 (in this case, 'bool_1' will be parsed, which is another expression, so parse_bool_logic_expression(...) will be called again):
-
-	char value[SNAKY_BUF_SIZE + 1];
-	if(snaky_parse_target_attrib_buf(str_origin, expr, value, sizeof(value), NULL, NULL))
-	{
-		int s = 0;
-		bool b = snaky_parse_bool(value, &s);
-		if(out_bool_value)
-			*out_bool_value = b;
-		if(!s)
-		{
-			// try to parse as another bool expression
-			int be = parse_bool_simple_expression(str_origin, value, sbuffer, buffer, buffer_size, out_bool_value, false);
-			if(be)
-				return 1;
-			else
-			{
-				vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", value);
-				return 0;
-			}
-		}
-
-		// re-insert real bool value into the given buffer
-		if(sbuffer)
-			snaky_strcpy(sbuffer, value);
-		else if(buffer && buffer_size > 0)
-			snprintf(buffer, buffer_size, "%s", value);
-
-		return 1;
-	}
-
-	// see if it was 'TRUE' 'FALSE' 'ON' or 'OFF'
-	int s = 0;
-	bool b = snaky_parse_bool(expr, &s);
-	if(out_bool_value)
-		*out_bool_value = b;
-	if(!s)
-	{
-		// if the value being parsed is not a bool, stop recursively calling this function
-		if(prevent_recursive_calls)
-			return 1;
-
-		// otherwise, try to parse as another boolean expression (but set prevent_recursive_calls to true for this call)
-		int be = parse_bool_simple_expression(str_origin, expr, sbuffer, buffer, buffer_size, out_bool_value, true);
-		if(be)
-			return 1;
-		else
-		{
-			vl_log(VL_ERROR, "Failed to parse boolean expression: '%s'!\n", expr);
-			return 0;
-		}
-	}
-
-	return 1;
-}
 static void trim_trailing_whitespace_from_value(snaky_string *sbuffer, char *buffer)
 {
 	// only trim trailing whitespace when the value is not a string (example of a string: "..., str = { some string!!     }"):
@@ -710,11 +530,6 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 
 	return_start_pos(value_start, out_start_pos);
 
-	// see if the value parsed is a bool reference (ex. bool_2 = bool_1) or expression (ex. bool_2 = bool_1 IS FALSE)
-	const char *expr = sbuffer ? sbuffer->data : buffer;
-	if(parse_bool_logic_expression(str_origin, expr, sbuffer, buffer, buffer_size, NULL))
-		return 1;
-
 	return 1;
 }
 
@@ -788,6 +603,9 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 	bool at_least_one_subfield_found = false;
 	for(const char *p = attrib_name; *p; ++p)
 	{
+		if(i + 1 >= sizeof(substring))
+			break;
+
 		// if a space is found, stop parsing substrings (substrings must be chained together with no whitespace)
 		if(isspace(*p))
 		{
@@ -2019,6 +1837,18 @@ bool snaky_parse_bool(const char *str, int *out_success)
 		return true;
 	}
 	else if(strncmp(str, "FALSE", 5) == 0 || strncmp(str, "OFF", 3) == 0)
+	{
+		if(out_success)
+			*out_success = 1;
+		return false;
+	}
+	else if(strncmp(str, "1", 1) == 0)
+	{
+		if(out_success)
+			*out_success = 1;
+		return true;
+	}
+	else if(strncmp(str, "0", 1) == 0)
 	{
 		if(out_success)
 			*out_success = 1;
