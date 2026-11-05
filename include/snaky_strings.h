@@ -62,6 +62,12 @@
   is equal to this value.
 */
 #define SNAKY_MAX_SUBSTRINGS 32
+/**
+  When defining custom functions using snaky_func functions,
+  this value represents the maximum value of arguments that
+  can be passed into a single snaky_func function.
+*/
+#define SNAKY_MAX_ARGS 16
 
 /**
   Contains string data.
@@ -871,11 +877,15 @@ SNAKY_API int snaky_define_eval_function(const char *str, snaky_eval_func func);
 
   @param str The name of the function that will be used in the attribute string.
   @param return_type The data type that is returned by the function.
-  @param fn_ptr A pointer to the internal function.
+  @param func A pointer to the function to use. The function should return the same
+  type as 'return_type,' and it should have 2 parameters: a float* representing
+  the generic array of arguments represented as float values, and a size_t representing the
+  number of arguments in the array.
+  @param num_args The expected number of arguments the function will take in.
 
   @see snaky_define_eval_function(const char*, snaky_eval_func)
 */
-SNAKY_API int snaky_define_function(const char *str, snaky_data_type return_type, void *fn_ptr);
+SNAKY_API int snaky_define_function(const char *str, snaky_data_type return_type, void *func, size_t num_args);
 
 /**
   Sets the key used when encrypting strings.

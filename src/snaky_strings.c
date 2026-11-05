@@ -11,6 +11,26 @@
 // number of bytes a snaky_string will increase by as an attrib string is parsed
 #define STR_CAPACITY_INCREASE 50
 
+// syntax and key marker characters:
+#define ATTRIB_STRING_OPENING "/<"
+#define ATTRIB_STRING_CLOSING ">/"
+#define LABEL_OPENING "/["
+#define LABEL_CLOSING "]/"
+#define COMMENT_OPENING "/*"
+#define COMMENT_CLOSING "*/"
+#define ARR_OPENING '['
+#define ARR_CLOSING ']'
+#define OBJ_OPENING "{" ATTRIB_STRING_OPENING
+#define OBJ_CLOSING ATTRIB_STRING_CLOSING "}"
+#define STR_OPENING '{'
+#define STR_CLOSING '}'
+#define ARR_ELEM_DELIM ','
+#define ATTRIB_DELIM ';'
+#define DATA_TYPE_ASSIGNMENT ':'
+#define OBJ_FIELD_DELIM '.'
+#define EXPR_OPENING '('
+#define EXPR_CLOSING ')'
+
 static bool init = false;
 
 // map of constant names to constant values:
@@ -36,8 +56,9 @@ static eval_func_registry eval_functions = {0};
 
 typedef struct function
 {
-	snaky_data_type return_type;
 	void *fn_ptr;
+	size_t num_args;
+	snaky_data_type return_type;
 } function;
 typedef struct func_registry
 {
@@ -48,7 +69,10 @@ typedef struct func_registry
 } func_registry;
 static func_registry functions = {0};
 
-static float factorial(float f)
+static int encrypt_key = INT_MAX % 26;
+
+// custom functions used in attribute expressions:
+static float cstm_factorial(float f)
 {
 	if(f == 0)
 		return 1.0f;
@@ -59,12 +83,51 @@ static float factorial(float f)
 
 	return ff;
 }
-static float rads(float f)
+static float cstm_rads(float f)
 {
 	return f * (M_PI / 180.0f);
 }
+static float cstm_abs(float f)
+{
+	return abs((int) f);
+}
+static float cstm_pow(float *args, size_t n)
+{
+	return powf(args[0], args[1]);
+}
+static float cstm_max(float *args, size_t n)
+{
+	return fmaxf(args[0], args[1]);
+}
+static float cstm_min(float *args, size_t n)
+{
+	return fminf(args[0], args[1]);
+}
+static float cstm_dist(float *args, size_t n)
+{
+	float x1 = args[0], y1 = args[1], x2 = args[3], y2 = args[4];
+	return sqrtf(powf(x2 - x1, 2) + powf(y2 - y1, 2));
+}
+static float cstm_logf(float *args, size_t n)
+{
+	float base = args[0];
+	float x = args[1];
 
-static int encrypt_key = INT_MAX % 26;
+	if(x <= 0 || base <= 0 || base == 1.0)
+		return 0.0f;
+
+	return logf(x) / logf(base);
+}
+static double cstm_logd(float *args, size_t n)
+{
+	double base = args[0];
+	double x = args[1];
+
+	if(x <= 0 || base <= 0 || base == 1.0)
+		return 0.0;
+
+	return log(x) / log(base);
+}
 
 int snaky_init()
 {
@@ -109,7 +172,7 @@ int snaky_init()
 		return 0;
 
 	// define some functions
-	if(!snaky_define_eval_function("factorial", factorial))
+	if(!snaky_define_eval_function("factorial", cstm_factorial))
 		return 0;
 	if(!snaky_define_eval_function("sin", sinf))
 		return 0;
@@ -119,13 +182,28 @@ int snaky_init()
 		return 0;
 	if(!snaky_define_eval_function("sqrt", sqrtf))
 		return 0;
-	if(!snaky_define_eval_function("rads", rads))
+	if(!snaky_define_eval_function("rads", cstm_rads))
 		return 0;
 	if(!snaky_define_eval_function("round", roundf))
 		return 0;
 	if(!snaky_define_eval_function("floor", floorf))
 		return 0;
 	if(!snaky_define_eval_function("ceil", ceilf))
+		return 0;
+	if(!snaky_define_eval_function("abs", cstm_abs))
+		return 0;
+
+	if(!snaky_define_function("pow", SNAKY_FLOAT, cstm_pow, 2))
+		return 0;
+	if(!snaky_define_function("max", SNAKY_FLOAT, cstm_max, 2))
+		return 0;
+	if(!snaky_define_function("min", SNAKY_FLOAT, cstm_min, 2))
+		return 0;
+	if(!snaky_define_function("dist", SNAKY_FLOAT, cstm_dist, 4))
+		return 0;
+	if(!snaky_define_function("logf", SNAKY_FLOAT, cstm_logf, 2))
+		return 0;
+	if(!snaky_define_function("logd", SNAKY_DOUBLE, cstm_logd, 2))
 		return 0;
 
 	vl_log(VL_SUCCESS, "snaky_strings successfully initialized!\n");
@@ -275,17 +353,41 @@ static const char *find_end_of_group(const char *start, char open, char close)
 
 	return NULL;
 }
+static const char *find_end_of_group_str(const char *start, const char *open, const char *close)
+{
+	// same logic as find_end_of_group(...):
+
+	size_t depth = 0;
+
+	size_t open_len = strlen(open);
+	size_t close_len = strlen(close);
+
+	for(const char *p = start; *p; ++p)
+	{
+		if(strncmp(p, open, open_len) == 0)
+			depth++;
+		else if(strncmp(p, close, close_len) == 0)
+		{
+			depth--;
+
+			if(depth == 0)
+				return p + close_len;
+		}
+	}
+
+	return NULL;
+}
 static const char *find_end_of_object(const char *start)
 {
-	return find_end_of_group(start, '{', '}');
+	return find_end_of_group(start, STR_OPENING, STR_CLOSING);
 }
 static const char *find_end_of_array(const char *start)
 {
-	return find_end_of_group(start, '[', ']');
+	return find_end_of_group(start, ARR_OPENING, ARR_CLOSING);
 }
 static const char *find_end_of_attribs(const char *start)
 {
-	return find_end_of_group(start, '<', '>');
+	return find_end_of_group_str(start, ATTRIB_STRING_OPENING, ATTRIB_STRING_CLOSING);
 }
 
 // skip all comments in a string until a valid char is reached
@@ -294,7 +396,7 @@ static void skip_comment(const char **str, size_t *out_num_spaces)
 	// after moving to next char, check for a comment
 	const char *comment_origin = *str;
 
-	while(**str && strncmp(*str, "*/", 2) != 0)
+	while(**str && strncmp(*str, COMMENT_CLOSING, strlen(COMMENT_CLOSING)) != 0)
 	{
 		(*str)++;
 
@@ -321,7 +423,7 @@ static void skip_whitespace(const char **str, size_t *out_num_spaces)
 		*out_num_spaces = 0;
 
 	// skip all comments found
-	while(strncmp(*str, "/*", 2) == 0)
+	while(strncmp(*str, COMMENT_OPENING, strlen(COMMENT_OPENING)) == 0)
 		skip_comment(str, out_num_spaces);
 
 	// now skip all spaces, and comments found after those spaces
@@ -332,7 +434,7 @@ static void skip_whitespace(const char **str, size_t *out_num_spaces)
 		(*str)++;
 
 		// skip any comments found
-		while(strncmp(*str, "/*", 2) == 0)
+		while(strncmp(*str, COMMENT_OPENING, strlen(COMMENT_OPENING)) == 0)
 			skip_comment(str, out_num_spaces);
 	}
 }
@@ -362,11 +464,11 @@ static int resolve_data_type(const char *start, snaky_data_type *out_data_type, 
 	// if the first char is a letter, skip to the ':'
 	if(isalpha(*start))
 	{
-		while(*start && *start != ':')
+		while(*start && *start != DATA_TYPE_ASSIGNMENT)
 			start++;
 	}
 	// if now on the ':', skip it
-	if(*start == ':')
+	if(*start == DATA_TYPE_ASSIGNMENT)
 		start++;
 
 	// skip all whitespace after the ':'
@@ -440,7 +542,7 @@ static void return_start_pos(const char *attribs_start, const char **out_start_p
 	// find start pos of next attribute
 	if(out_start_pos)
 	{
-		while(*attribs_start && *attribs_start != ',' && *attribs_start != '<')
+		while(*attribs_start && *attribs_start != ATTRIB_DELIM && strncmp(attribs_start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0)
 			attribs_start++;
 
 		if(!*attribs_start)
@@ -460,7 +562,7 @@ static void trim_trailing_whitespace_from_value(snaky_string *sbuffer, char *buf
 	char *start_of_str = buf;
 	char *end_of_str = buf + strlen(buf) - 1;
 
-	if(*buf == '{' && *(buf + 1) != '<')
+	if(*buf == STR_OPENING && strncmp(buf, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) != 0)
 		// do not trim
 		return;
 	
@@ -474,7 +576,7 @@ static void trim_trailing_whitespace_from_value(snaky_string *sbuffer, char *buf
 	if(end_of_str != start_of_str)
 		*(end_of_str + 1) = '\0';
 }
-static int parse_value(const char *str_origin, const char *value_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_start_pos, bool break_on_comma, const char *(*end_pos_fn)(const char*))
+static int parse_value(const char *str_origin, const char *value_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_start_pos, const char *(*end_pos_fn)(const char*))
 {
 	const char *end_pos = NULL;
 	if(end_pos_fn)
@@ -483,8 +585,11 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 	{
 		const char *value_start_copy_origin = value_start;
 		const char *value_start_copy = value_start;
-		while(*value_start_copy && *value_start_copy != ',' && *value_start_copy != '>')
+
+		while(*value_start_copy && strncmp(value_start_copy, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0 && *value_start_copy != ATTRIB_DELIM)
+			// move end_pos pointer
 			end_pos = value_start_copy++;
+
 		// make sure to skip to the actual ending char (',' or '>')
 		end_pos++;
 		if(!*value_start_copy)
@@ -497,9 +602,6 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 	size_t i = 0;
 	while(*value_start && value_start != end_pos)
 	{
-		if(break_on_comma && *value_start == ',')
-			break;
-
 		if(sbuffer)
 		{
 			if(i + 1 >= sbuffer->size)
@@ -558,28 +660,28 @@ static int parse_target_attrib(const char *str_origin, const char *attribs_start
 	}
 
 	// if the start of the attribute is an opening of another attribute string, error out
-	if(*attribs_start == '<')
+	if(strncmp(attribs_start, ATTRIB_STRING_OPENING, 2) == 0)
 	{
 		vl_log(VL_ERROR, "Nested attribute strings must be wrapped around '{}'!\n");
 		return 0;
 	}
 
 	// determine if a nested attribute or string is given
-	if(*attribs_start == '{')
+	if(*attribs_start == STR_OPENING)
 	{
 		if(out_data_type)
 			*out_data_type = SNAKY_OBJECT;
-		return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_start_pos, false, find_end_of_object);
+		return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_start_pos, find_end_of_object);
 	}
-	else if(*attribs_start == '[')
+	else if(*attribs_start == ARR_OPENING)
 	{
 		if(out_data_type)
 			*out_data_type = SNAKY_ARRAY;
-		return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_start_pos, false, find_end_of_array);
+		return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_start_pos, find_end_of_array);
 	}
 
 	// if not a nested string, copy the attrib value normally (no end_pos_fn for a normal value)
-	return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_start_pos, true, NULL);
+	return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_start_pos, NULL);
 }
 static int prepare_parse_target_attrib(const char *str, const char *attrib_name, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
 {
@@ -595,10 +697,10 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		return 0;
 
 	// see if user is trying to find a nested attribute :
-	char substrings[SNAKY_MAX_SUBSTRINGS][SNAKY_BUF_SIZE + 1] = {0};
+	char substrings[SNAKY_MAX_SUBSTRINGS][SNAKY_BUF_SIZE] = {0};
 	int num_substrings = 0;
 
-	char substring[SNAKY_BUF_SIZE + 1] = {0};
+	char substring[SNAKY_BUF_SIZE] = {0};
 	int i = 0;
 	bool at_least_one_subfield_found = false;
 	for(const char *p = attrib_name; *p; ++p)
@@ -616,7 +718,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		}
 
 		// check for a '.' which means the current substring has ended
-		if(*p == '.')
+		if(*p == OBJ_FIELD_DELIM)
 		{
 			// if no more rows, error out
 			if(num_substrings >= SNAKY_MAX_SUBSTRINGS)
@@ -695,16 +797,15 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		return 1;
 
 	// see if user searching for a value within an array (requires '[N]' in 'attrib_name')
-	char index_value[SNAKY_BUF_SIZE + 1] = {0};
+	char index_value[SNAKY_BUF_SIZE] = {0};
 	for(const char *p = attrib_name; *p; ++p)
 	{
-		if(*p == '[')
+		if(*p == ARR_OPENING)
 		{
-			// skip the '['
 			p++;
 
 			size_t i = 0;
-			while(*p && *p != ']')
+			while(*p && *p != ARR_CLOSING)
 			{
 				if(i + 1 >= sizeof(index_value))
 					break;
@@ -739,7 +840,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		size_t actual_array_name_len = 0;
 		for(const char *a = attrib_name; *a; ++a)
 		{
-			if(*a == '[')
+			if(*a == ARR_OPENING)
 				break;
 			actual_array_name_len++;
 		}
@@ -749,8 +850,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		{
 			if(strncmp(p, attrib_name, actual_array_name_len) == 0)
 			{
-				// jump to the character right after the '['
-				while(*p && *p != '[')
+				while(*p && *p != ARR_OPENING)
 					p++;
 				if(!*p)
 				{
@@ -762,10 +862,10 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 
 				// when the array is found, go to the specific index in the array
 				size_t curr_index = 0;
-				while(*p && *p != ']')
+				while(*p && *p != ARR_CLOSING)
 				{
 					// see if a ',' is found
-					if(*p == ',')
+					if(*p == ARR_ELEM_DELIM)
 						curr_index++;
 
 					// go to next valid character
@@ -774,7 +874,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 
 					// when the current index matches the target index:
 					if(curr_index == index)
-						return parse_value(str_origin, array_start, sbuffer, buffer, buffer_size, out_start_pos, false, find_end_of_array);
+						return parse_value(str_origin, array_start, sbuffer, buffer, buffer_size, out_start_pos, find_end_of_array);
 				}
 
 				if(curr_index < index)
@@ -795,14 +895,28 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		// get char
 		char c = *p;
 
+		// exit an attrib string when '>' is found
+		if(strncmp(p, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) == 0 && in_attrib_string)
+			in_attrib_string = false;
+
+		/*
+		   also exit the current attrib string when an
+		   object is encountered
+
+		   this way, when the next '<' is found for the
+		   object, its fields can be parsed as well
+		*/
+		if(c == STR_OPENING && in_attrib_string)
+			in_attrib_string = false;
+
 		// when the first '<' or ',' is encountered, compare attrib to the target arg
-		if(c == '<' && !in_attrib_string)
+		if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0 && !in_attrib_string)
 		{
 			// now the parser is in an attribute string
 			in_attrib_string = true;
 
 			// compare the attribute with the target attribute
-			const char *attribs_start = p + 1;
+			const char *attribs_start = p + strlen(ATTRIB_STRING_OPENING);
 
 			skip_whitespace(&attribs_start, NULL);
 
@@ -822,7 +936,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		}
 
 		// parse all subsequent attributes in an attrib string
-		if(c == ',' && in_attrib_string)
+		if(c == ATTRIB_DELIM && in_attrib_string)
 		{
 			// same logic as above
 			const char *attribs_start = p + 1;
@@ -844,20 +958,6 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 
 			continue;
 		}
-
-		// exit an attrib string when '>' is found
-		if(c == '>' && in_attrib_string)
-			in_attrib_string = false;
-
-		/*
-		   also exit the current attrib string when an
-		   object is encountered
-
-		   this way, when the next '<' is found for the
-		   object, its fields can be parsed as well
-		*/
-		if(c == '{' && in_attrib_string)
-			in_attrib_string = false;
 	}
 
 	return 0;
@@ -874,6 +974,8 @@ int snaky_parse_target_attrib_str(const char *str, const char *attrib_name, snak
 static int parse_attrib(const char *str_origin, const char *attribs_start, snaky_string *name_str, snaky_string *value_str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
 {
 	skip_whitespace(&attribs_start, NULL);
+
+	// TODO add way to detect UNDEF, just "attrib_name;", no '= VALUE' part found
 
 	// 'attribs_start' points to the first char in the attrib name
 	size_t i = 0;
@@ -903,7 +1005,7 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 			continue;
 
 		// see if a ':' is found
-		if(next == ':')
+		if(next == DATA_TYPE_ASSIGNMENT)
 		{
 			size_t jump = 0;
 			resolve_data_type(attribs_start, out_data_type, &jump);
@@ -940,7 +1042,7 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 	skip_whitespace(&attribs_start, NULL);
 
 	// if the start of the attribute is an opening of another attribute string, error out
-	if(*attribs_start == '<')
+	if(strncmp(attribs_start, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0)
 	{
 		vl_log(VL_ERROR, "Nested attribute strings must be wrapped around '{}'!\n");
 		return 0;
@@ -952,22 +1054,22 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 		return 0;
 	}
 
-	if(*attribs_start == '[')
+	if(*attribs_start == ARR_OPENING)
 	{
 		if(out_data_type)
 			*out_data_type = SNAKY_ARRAY;
-		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, out_start_pos, false, find_end_of_array);
+		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, out_start_pos, find_end_of_array);
 	}
-	else if(*attribs_start == '{')
+	else if(*attribs_start == STR_OPENING)
 	{
 		if(out_data_type)
 			*out_data_type = SNAKY_OBJECT;
-		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, out_start_pos, false, find_end_of_object);
+		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, out_start_pos, find_end_of_object);
 	}
 
 	// if not a nested string, copy the attrib value normally
 	i = 0;
-	while(*attribs_start && *attribs_start != '>' && *attribs_start != ',')
+	while(*attribs_start && strncmp(attribs_start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0 && *attribs_start != ATTRIB_DELIM)
 	{
 		if(value_str)
 		{
@@ -1025,7 +1127,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 			return parse_attrib(str_origin, p, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_start_pos, out_data_type);
 
 		// if the first char is a group indicator, skip the string entirely
-		if(c == '{')
+		if(c == STR_OPENING)
 		{
 			const char *start_of_object = p;
 
@@ -1043,7 +1145,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		}
 
 		// when the first '<' or ',' is encountered, see what the very next attrib is
-		if((c == '<' || c == ',') && !in_attrib_string)
+		if((strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0 || c == ATTRIB_DELIM) && !in_attrib_string)
 		{
 			in_attrib_string = true;
 
@@ -1061,7 +1163,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		}
 
 		// parse the very next attrib found
-		if(c == ',' && in_attrib_string)
+		if(c == ATTRIB_DELIM && in_attrib_string)
 		{
 			const char *attribs_start = p + 1;
 
@@ -1077,7 +1179,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		}
 
 		// nested attributes are skipped
-		if(c == '<' && in_attrib_string)
+		if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0 && in_attrib_string)
 		{
 			while(*p && *p != '>')
 				++p;
@@ -1092,7 +1194,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		}
 
 		// exit an attrib string when '>' is found
-		if(c == '>' && in_attrib_string)
+		if(strncmp(p, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) == 0 && in_attrib_string)
 			in_attrib_string = false;
 	}
 
@@ -1116,7 +1218,7 @@ int snaky_remove_attrib_buf(char *str, const char *attrib_name)
 
 	// see if the attrib is found
 	const char *start_pos = NULL;
-	char attrib_value[SNAKY_BUF_SIZE + 1];
+	char attrib_value[SNAKY_BUF_SIZE];
 	if(!snaky_parse_target_attrib_buf(str, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
 	{
 		vl_log(VL_ERROR, "The '%s' attribute was not found in this string: '%s'!\n", attrib_name, str);
@@ -1143,8 +1245,12 @@ int snaky_remove_attrib_buf(char *str, const char *attrib_name)
 	// see if that was the last attribute in the string, and if so, remove trailing ',' and replace with '>'
 	size_t len = strlen(str);
 
-	if(len > 0 && str[len - 1] == ',')
-		str[len - 1] = '>';
+	// FIXME TODO
+	if(len > 0 && str[len - 1] == ATTRIB_DELIM)
+	{
+		str[len - 2] = ATTRIB_STRING_CLOSING[0];
+		str[len - 1] = ATTRIB_STRING_CLOSING[1];
+	}
 
 	return 1;
 }
@@ -1157,7 +1263,7 @@ int snaky_remove_attrib_str(snaky_string *str, const char *attrib_name)
 
 	// see if the attrib is found
 	const char *start_pos = NULL;
-	char attrib_value[SNAKY_BUF_SIZE + 1];
+	char attrib_value[SNAKY_BUF_SIZE];
 	if(!snaky_parse_target_attrib_buf(str->data, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
 	{
 		vl_log(VL_ERROR, "The '%s' attribute was not found in this string: '%s'!\n", attrib_name, str);
@@ -1185,7 +1291,8 @@ int snaky_remove_attrib_str(snaky_string *str, const char *attrib_name)
 	size_t len = strlen(str->data);
 	str->len = len;
 
-	if(len > 0 && str->data[len - 1] == ',')
+	// TODO FIXME
+	if(len > 0 && str->data[len - 1] == ATTRIB_DELIM)
 		str->data[len - 1] = '>';
 
 	return 1;
@@ -1209,7 +1316,7 @@ int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name,
 	bool attrib_found = false;
 	const char *start_pos = NULL;
 
-	char attrib_value[SNAKY_BUF_SIZE + 1];
+	char attrib_value[SNAKY_BUF_SIZE];
 	if(snaky_parse_target_attrib_buf(buf, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
 	{
 		edit_pos = (char*) start_pos;
@@ -1271,7 +1378,7 @@ int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name,
 		const char *origin = buf;
 		while(*buf && *buf != '>')
 		{
-			if(*buf == '{')
+			if(*buf == STR_OPENING)
 			{
 				const char *end_of_object = find_end_of_object(buf);
 				if(!end_of_object)
@@ -1295,11 +1402,14 @@ int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name,
 
 		if(!empty && num_attribs > 0)
 		{
-			insert_char_buf(buf++, ',');
+			insert_char_buf(buf++, ATTRIB_DELIM);
 			insert_char_buf(buf++, ' ');
 		}
 		else if(empty)
-			insert_char_buf(buf++, '<');
+		{
+			insert_char_buf(buf++, ATTRIB_STRING_OPENING[0]);
+			insert_char_buf(buf++, ATTRIB_STRING_OPENING[1]);
+		}
 
 		// now insert attrib name
 		for(size_t i = 0; i < strlen(attrib_name); ++i)
@@ -1314,7 +1424,10 @@ int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name,
 
 		// close attrib string if necessary
 		if(empty || num_attribs == 0)
-			insert_char_buf(buf++, '>');
+		{
+			insert_char_buf(buf++, ATTRIB_STRING_CLOSING[0]);
+			insert_char_buf(buf++, ATTRIB_STRING_CLOSING[1]);
+		}
 	}
 	else
 	{
@@ -1344,7 +1457,7 @@ int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char 
 	bool attrib_found = false;
 	const char *start_pos = NULL;
 
-	char attrib_value[SNAKY_BUF_SIZE + 1];
+	char attrib_value[SNAKY_BUF_SIZE];
 	if(snaky_parse_target_attrib_buf(str->data, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
 	{
 		edit_pos = (char*) start_pos;
@@ -1404,7 +1517,7 @@ int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char 
 		while(*buf && *buf != '>')
 		{
 			// see if an object should be skipped
-			if(*buf == '{')
+			if(*buf == STR_OPENING)
 			{
 				const char *end_of_object = find_end_of_object(buf);
 				if(!end_of_object)
@@ -1429,7 +1542,7 @@ int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char 
 		// insert ', ' there if at least one attrib is already present
 		if(!empty && num_attribs > 0)
 		{
-			insert_char_buf(buf++, ',');
+			insert_char_buf(buf++, ATTRIB_DELIM);
 			insert_char_buf(buf++, ' ');
 		}
 		// if no attribs are present, insert '<' and keep track of this so later the '>' can be inserted too
@@ -1544,8 +1657,8 @@ size_t snaky_count_attribs(const char *str)
 		char c = *p;
 
 		// an attrib is counted when the 'name=value' format is found exactly
-		char name[SNAKY_BUF_SIZE + 1];
-		char value[SNAKY_BUF_SIZE + 1];
+		char name[SNAKY_BUF_SIZE];
+		char value[SNAKY_BUF_SIZE];
 		if(snaky_parse_attrib_buf(p, name, sizeof(name), value, sizeof(value), NULL, NULL))
 			count++;
 	}
@@ -1559,7 +1672,7 @@ bool snaky_is_string(const char *str)
 		return false;
 
 	// a string starts with '{' but the next char cannot be '<'
-	bool valid_start = *str == '{' && *(str + 1) != '<';
+	bool valid_start = *str == STR_OPENING && strncmp(str, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) != 0;
 
 	// find the matching '}'
 	const char *end_pos = find_end_of_object(str);
@@ -1573,7 +1686,7 @@ bool snaky_is_object(const char *str)
 		return false;
 
 	// ensure string has the correct starting chars
-	bool valid_start = *str && *str == '{' && *(str + 1) == '<';
+	bool valid_start = *str && *str == STR_OPENING && strncmp(str, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0;
 
 	// find the matching '}'
 	const char *end_pos = find_end_of_object(str);
@@ -1583,7 +1696,7 @@ bool snaky_is_object(const char *str)
 }
 bool snaky_is_attrib_string(const char *str)
 {
-	if(!str || *str != '<')
+	if(!str || strncmp(str, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) != 0)
 		return false;
 
 	// find the matching '>'
@@ -1633,12 +1746,12 @@ void snaky_goto_label(const char *str, const char *label_name, const char **out_
 	while(*str)
 	{
 		// first, find the "/[" characters
-		if(strncmp(str, "/[", 2) == 0)
+		if(strncmp(str, LABEL_OPENING, strlen(LABEL_OPENING)) == 0)
 		{
 			const char *label_origin = str;
 
 			// move past the "/["
-			str += 2;
+			str += strlen(LABEL_OPENING);
 
 			skip_whitespace(&str, NULL);
 
@@ -1648,10 +1761,10 @@ void snaky_goto_label(const char *str, const char *label_name, const char **out_
 				// if the names match, now move to the first valid char after the closing "]/" characters
 				while(*str)
 				{
-					if(strncmp(str, "]/", 2) == 0)
+					if(strncmp(str, LABEL_CLOSING, strlen(LABEL_CLOSING)) == 0)
 					{
 						// move past the "]/"
-						str += 2;
+						str += strlen(LABEL_CLOSING);
 
 						// skip all whitespace again
 						skip_whitespace(&str, NULL);
@@ -1684,11 +1797,11 @@ int snaky_generate_attrib_map(const char *str, snaky_attrib_map *map)
 		return 0;
 
 	snaky_string name = {0};
-	if(!snaky_prepare_str(&name, SNAKY_BUF_SIZE + 1))
+	if(!snaky_prepare_str(&name, SNAKY_BUF_SIZE))
 		return 0;
 
 	snaky_string value = {0};
-	if(!snaky_prepare_str(&value, SNAKY_BUF_SIZE + 1))
+	if(!snaky_prepare_str(&value, SNAKY_BUF_SIZE))
 	{
 		snaky_free_str(&name);
 		return 0;
@@ -1722,11 +1835,11 @@ int snaky_generate_attrib_list(const char *str, snaky_attrib_list *list)
 		return 0;
 
 	snaky_string name = {0};
-	if(!snaky_prepare_str(&name, SNAKY_BUF_SIZE + 1))
+	if(!snaky_prepare_str(&name, SNAKY_BUF_SIZE))
 		return 0;
 
 	snaky_string value = {0};
-	if(!snaky_prepare_str(&value, SNAKY_BUF_SIZE + 1))
+	if(!snaky_prepare_str(&value, SNAKY_BUF_SIZE))
 	{
 		snaky_free_str(&name);
 		return 0;
@@ -1737,13 +1850,13 @@ int snaky_generate_attrib_list(const char *str, snaky_attrib_list *list)
 	while(start_pos && snaky_parse_attrib_str(start_pos, &name, &value, &start_pos, &data_type))
 	{
 		snaky_attrib_entry entry = {0};
-		if(!snaky_prepare_str(&entry.name, SNAKY_BUF_SIZE + 1))
+		if(!snaky_prepare_str(&entry.name, SNAKY_BUF_SIZE))
 		{
 			snaky_free_str(&name);
 			snaky_free_str(&value);
 			return 0;
 		}
-		if(!snaky_prepare_str(&entry.value, SNAKY_BUF_SIZE + 1))
+		if(!snaky_prepare_str(&entry.value, SNAKY_BUF_SIZE))
 		{
 			snaky_free_str(&name);
 			snaky_free_str(&value);
@@ -1858,28 +1971,100 @@ bool snaky_parse_bool(const char *str, int *out_success)
 		return false;
 }
 
+// returns the current char the pointer is on
 static char peek_next_char(const char **str)
 {
 	skip_whitespace(str, NULL);
 	return **str;
 }
+// moves pointer one slot forward and returns the char in that new slot
 static char get_next_char(const char **str)
 {
 	skip_whitespace(str, NULL);
 	return *(*str)++;
 }
 static float parse_term(const char*, const char**, int*);
-static float parse_expression(const char *origin, const char **str, int *out_success)
+static float parse_bitwise(const char *origin, const char **str, int *out_success)
 {
 	int s = 0;
+	// parse the first term
 	float f = parse_term(origin, str, &s);
 	*out_success = s;
 	if(s == 0)
 		return 0.0f;
+
+	while(peek_next_char(str) == '|' || peek_next_char(str) == '&' || peek_next_char(str) == '^' ||
+			peek_next_char(str) == '<' || peek_next_char(str) == '>')
+	{
+		char op = get_next_char(str);
+
+		// see if the operator is actually a "<<" or ">>" shift
+		char bitshift[3] = {0};
+		if(op == '<')
+			strcpy(bitshift, "<<");
+		else if(op == '>')
+			strcpy(bitshift, ">>");
+		size_t bitshift_len = strlen(bitshift);
+		if(bitshift_len > 0)
+			get_next_char(str);
+
+		// parse the second term
+		float next_val = parse_term(origin, str, &s);
+		*out_success = s;
+		if(s == 0)
+			return 0.0f;
+
+		int fi = (int) f;
+		int next_val_i = (int) next_val;
+		// determine which operators to use
+		if(bitshift_len > 0)
+		{
+			if(strcmp(bitshift, "<<") == 0)
+				fi <<= next_val_i;
+			else if(strcmp(bitshift, ">>") == 0)
+				fi >>= next_val_i;
+		}
+		else
+		{
+			if(op == '|')
+				fi |= next_val_i;
+			else if(op == '&')
+				fi &= next_val_i;
+			else if(op == '^')
+				fi ^= next_val_i;
+		}
+
+		f = fi;
+		*out_success = 1;
+	}
+
+	return f;
+}
+/*
+   the first function call for an expression:
+
+   order is lowest precedence to highest
+
+   expression,
+   bitwise,
+   term,
+   factor
+*/
+static float parse_expression(const char *origin, const char **str, int *out_success)
+{
+	int s = 0;
+	// tries to parse a bitwise operation which is made up of terms
+	float f = parse_bitwise(origin, str, &s);
+	*out_success = s;
+	if(s == 0)
+		return 0.0f;
+	// after parsing the first term, check for lowest precedence operators like + and -
 	while(peek_next_char(str) == '+' || peek_next_char(str) == '-')
 	{
 		char op = get_next_char(str);
-		float next_val = parse_term(origin, str, &s);
+
+		// parse second term and calculate result
+		float next_val = parse_bitwise(origin, str, &s);
 		*out_success = s;
 		if(s == 0)
 			return 0.0f;
@@ -1902,7 +2087,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 
 	// find expression wrapped around '()'
 	char c = peek_next_char(str);
-	if(c == '(')
+	if(c == EXPR_OPENING)
 	{
 		char next = get_next_char(str);
 		int s = 0;
@@ -1910,7 +2095,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 		*out_success = s;
 		if(s == 0)
 			return 0.0f;
-		if(peek_next_char(str) == ')')
+		if(peek_next_char(str) == EXPR_CLOSING)
 		{
 			get_next_char(str);
 			*out_success = 1;
@@ -1938,7 +2123,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 	// see if user provided a function or attrib name
 	if(isalpha(c))
 	{
-		char attrib_name[SNAKY_BUF_SIZE + 1];
+		char attrib_name[SNAKY_BUF_SIZE];
 		size_t i = 0;
 
 		// keep track of where to start the recursive search
@@ -1956,11 +2141,11 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 			}
 
 			// stop searching for just letters when an array index starts
-			if(**str == '[')
+			if(**str == ARR_OPENING)
 				checking_only_alpha = false;
 
 			// re-enable alpha-only rule
-			if(**str == ']')
+			if(**str == ARR_CLOSING)
 				checking_only_alpha = true;
 
 			if(checking_only_alpha && !isalpha(**str))
@@ -1974,7 +2159,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 		// see what the value is:
 
 		// try to parse as a target attribute:
-		char attrib[SNAKY_BUF_SIZE + 1];
+		char attrib[SNAKY_BUF_SIZE];
 		snaky_data_type data_type = SNAKY_INVALID;
 		if(snaky_parse_target_attrib_buf(origin, attrib_name, attrib, sizeof(attrib), NULL, &data_type))
 		{
@@ -2019,7 +2204,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 		{
 			if(strcmp(attrib_name, eval_functions.keys[i]) == 0)
 			{
-				if(peek_next_char(str) == '(')
+				if(peek_next_char(str) == EXPR_OPENING)
 				{
 					char next = get_next_char(str);
 					int s = 0;
@@ -2027,7 +2212,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 					*out_success = s;
 					if(s == 0)
 						return 0.0f;
-					if(peek_next_char(str) == ')')
+					if(peek_next_char(str) == EXPR_CLOSING)
 					{
 						get_next_char(str);
 						*out_success = 1;
@@ -2047,21 +2232,69 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 		{
 			if(strcmp(attrib_name, functions.keys[i]) == 0)
 			{
-				if(peek_next_char(str) == '(')
+				if(peek_next_char(str) == EXPR_OPENING)
 				{
+					const char *start_paren = *str;
+
 					char next = get_next_char(str);
 
 					// get the string being parsed here:
-					char fn_arg[SNAKY_BUF_SIZE + 1];
+					char fn_args[SNAKY_MAX_ARGS][SNAKY_BUF_SIZE] = {0};
+					size_t num_args = 0;
+
+					char fn_arg[SNAKY_BUF_SIZE] = {0};
 					size_t j = 0;
 
+					// see where the matching ')' is
+					const char *end_paren = find_end_of_group(start_paren, EXPR_OPENING, EXPR_CLOSING);
+					if(!end_paren)
+					{
+						vl_log(VL_ERROR, "Expected matching ')' in string: '%s'!\n", start_paren);
+						*out_success = 0;
+						return 0.0f;
+					}
+
 					// move str to the next ')', while adding to fn_arg buffer
-					while(**str && **str != ')')
+					while(**str && *str != end_paren)
+					{
+						// get next char but do not move pointer yet
+						char next = peek_next_char(str);
+
+						// when an argument is going to end, finish building the current arg string and add it to the total array:
+						if(next == ATTRIB_DELIM || next == EXPR_CLOSING)
+						{
+							if(num_args >= SNAKY_MAX_ARGS)
+							{
+								vl_log(VL_WARNING, "Max number of arguments reached for function call: '%s', number of arguments: %zu!\n", functions.keys[i], num_args);
+								break;
+							}
+
+							// when the next char is a ',' then a new argument should be added:
+							fn_arg[j] = '\0';
+							strcpy(fn_args[num_args], fn_arg);
+
+							// reset char counter for fn_arg buffer
+							j = 0;
+
+							// add to number of arguments
+							num_args++;
+
+							// if the char is a ',' go to next char and continue loop
+							if(next == ATTRIB_DELIM)
+							{
+								(*str)++;
+								continue;
+							}
+							// but if the next char is a ')' break loop
+							if(next == EXPR_CLOSING)
+								break;
+						}
+
+						// otherwise, add contents to current fn arg buffer (move pointer forward to next char)
 						fn_arg[j++] = *(*str)++;
+					}
 
-					fn_arg[j] = '\0';
-
-					if(peek_next_char(str) == ')')
+					if(peek_next_char(str) == EXPR_CLOSING)
 					{
 						get_next_char(str);
 						*out_success = 1;
@@ -2069,32 +2302,61 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 						// parse func data
 						function func_data = functions.values[i];
 
+						// make sure args match:
+						if(num_args != func_data.num_args)
+						{
+							vl_log(VL_ERROR, "The function '%s' expects %zu arguments but received %zu!\n", functions.keys[i], func_data.num_args, num_args);
+							*out_success = 0;
+							return 0.0f;
+						}
+
+						// convert fn_args to a const char* array
+						const char *fn_args_ptr[num_args];
+
+						// copy pointers over to new array
+						for(size_t i = 0; i < num_args; ++i)
+							fn_args_ptr[i] = fn_args[i];
+
+						// now create a duplicate array holding floats instead of strings
+						float floats[num_args];
+						for(size_t i = 0; i < num_args; ++i)
+						{
+							int s = 0;
+							floats[i] = parse_expression(origin, &fn_args_ptr[i], &s);
+							if(s == 0)
+							{
+								vl_log(VL_ERROR, "Failed to parse value in string: '%s'!\n", fn_args_ptr[i]);
+								*out_success = 0;
+								return 0.0f;
+							}
+						}
+
 						switch(func_data.return_type)
 						{
 							case SNAKY_CHAR:
 							{
-								char (*fn_ptr) (const void*) = func_data.fn_ptr;
-								return fn_ptr(fn_arg);
+								char (*fn_ptr) (float*, size_t) = func_data.fn_ptr;
+								return fn_ptr(floats, num_args);
 							}
 							case SNAKY_BOOL:
 							{
-								bool (*fn_ptr) (const void*) = func_data.fn_ptr;
-								return fn_ptr(fn_arg);
+								bool (*fn_ptr) (float*, size_t) = func_data.fn_ptr;
+								return fn_ptr(floats, num_args);
 							}
 							case SNAKY_INT:
 							{
-								int (*fn_ptr) (const void*) = func_data.fn_ptr;
-								return fn_ptr(fn_arg);
+								int (*fn_ptr) (float*, size_t) = func_data.fn_ptr;
+								return fn_ptr(floats, num_args);
 							}
 							case SNAKY_FLOAT:
 							{
-								float (*fn_ptr) (const void*) = func_data.fn_ptr;
-								return fn_ptr(fn_arg);
+								float (*fn_ptr) (float*, size_t) = func_data.fn_ptr;
+								return fn_ptr(floats, num_args);
 							}
 							case SNAKY_DOUBLE:
 							{
-								double (*fn_ptr) (const void*) = func_data.fn_ptr;
-								return fn_ptr(fn_arg);
+								double (*fn_ptr) (float*, size_t) = func_data.fn_ptr;
+								return fn_ptr(floats, num_args);
 							}
 							default:
 								vl_log(VL_ERROR, "Invalid return type of function: %d!\n", func_data.return_type);
@@ -2115,25 +2377,27 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 	*out_success = 0;
 	return 0.0f;
 }
-static float parse_exponent(const char*, const char**, int*);
 static float parse_term(const char *origin, const char **str, int *out_success)
 {
 	int s = 0;
-	float f = parse_exponent(origin, str, &s);
+	// tries to parse a single factor
+	float f = parse_factor(origin, str, &s);
 	*out_success = s;
 	if(s == 0)
 		return 0.0f;
 
-	while(peek_next_char(str) == '*' || peek_next_char(str) == '/')
+	while(peek_next_char(str) == '*' || peek_next_char(str) == '/' || peek_next_char(str) == '%')
 	{
 		char op = get_next_char(str);
-		float next_val = parse_exponent(origin, str, &s);
+
+		// parse the second factor
+		float next_val = parse_factor(origin, str, &s);
 		*out_success = s;
 		if(s == 0)
 			return 0.0f;
 		if(op == '*')
 			f *= next_val;
-		else
+		else if(op == '/')
 		{
 			if(next_val == 0)
 			{
@@ -2142,32 +2406,16 @@ static float parse_term(const char *origin, const char **str, int *out_success)
 			}
 			f /= next_val;
 		}
+		else if(op == '%')
+		{
+			int fi = (int) f;
+			fi %= (int) next_val;
+			f = fi;
+		}
 
 		*out_success = 1;
 	}
 
-	return f;
-}
-static float parse_exponent(const char *origin, const char **str, int *out_success)
-{
-	int s = 0;
-	float f = parse_factor(origin, str, &s);
-	*out_success = s;
-	if(s == 0)
-		return 0.0f;
-	
-	if(peek_next_char(str) == '^')
-	{
-		get_next_char(str);
-
-		float exp = parse_exponent(origin, str, &s);
-		*out_success = s;
-		if(s == 0)
-			return 0.0f;
-		f = powf(f, exp);
-	}
-
-	*out_success = 1;
 	return f;
 }
 int snaky_parse_int(const char *origin, const char *str, int *out_success)
@@ -2315,7 +2563,7 @@ void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, s
 	*out_success = 0;
 
 	snaky_string attrib = {0};
-	if(!snaky_prepare_str(&attrib, SNAKY_BUF_SIZE + 1))
+	if(!snaky_prepare_str(&attrib, SNAKY_BUF_SIZE))
 		return;
 
 	snaky_data_type resolved_type = SNAKY_INVALID;
@@ -2447,7 +2695,7 @@ int snaky_read_file_buf(const char *file_path, char *buffer, size_t buffer_size,
 	else if(mode == SNAKY_FWRITE_TEXT)
 	{
 		// TODO use snaky strings while reading, no more MAX_LINE_LEN
-		char read[SNAKY_MAX_LINE_LEN + 1];
+		char read[SNAKY_MAX_LINE_LEN];
 		size_t total_size = 0;
 		while(fgets(read, sizeof(read), f))
 		{
@@ -2548,7 +2796,7 @@ int snaky_read_file_str(const char *file_path, snaky_string *str, snaky_fwrite_m
 	}
 	else if(mode == SNAKY_FWRITE_TEXT)
 	{
-		char read[SNAKY_MAX_LINE_LEN + 1];
+		char read[SNAKY_MAX_LINE_LEN];
 		size_t total_size = 0;
 		while(fgets(read, sizeof(read), f))
 		{
@@ -3025,17 +3273,18 @@ int snaky_define_eval_function(const char *str, snaky_eval_func func)
 
 	return 1;
 }
-int snaky_define_function(const char *str, snaky_data_type return_type, void *fn_ptr)
+int snaky_define_function(const char *str, snaky_data_type return_type, void *func, size_t num_args)
 {
-	if(!fn_ptr)
+	if(!func)
 	{
 		vl_log(VL_ERROR, "Cannot define a NULL function!\n");
 		return 0;
 	}
 
 	function func_data = {0};
+	func_data.fn_ptr = func;
+	func_data.num_args = num_args;
 	func_data.return_type = return_type;
-	func_data.fn_ptr = fn_ptr;
 
 	dynmaps_set_strkey(&functions, str, func_data);
 	if(functions.alloc_failure)
