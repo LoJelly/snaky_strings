@@ -160,16 +160,16 @@ typedef enum snaky_data_type
 	*/
 	SNAKY_ARRAY,
 	/**
-	  Represents the object type.
-	*/
-	SNAKY_OBJECT,
-	/**
 	  Represents the string type.
 
 	  @important When parsing attributes,
 	  this becomes the default data type.
 	*/
-	SNAKY_STRING
+	SNAKY_STRING,
+	/**
+	  Represents the attribute string type.
+	*/
+	SNAKY_ATTRIB_STRING
 } snaky_data_type;
 
 /**
@@ -399,9 +399,8 @@ SNAKY_API int snaky_realloc_str(snaky_string *str, size_t bytes);
   @param buffer_size The size of 'buffer' in bytes.
   @param out_start_pos A pointer to a const char*. If a valid pointer
   is given, it will be equal to the position in the original
-  string where the next attribute starts. Specifically, it will point
-  to the first character in the next attribute name found. If no next
-  attribute is found, then the pointer will be equal to NULL.
+  string where the parsed attribute's value starts. If the attribute is not
+  found, then the pointer will be equal to NULL.
   @param out_data_type A pointer to a snaky_data_type. If a valid pointer
   is given, it will be equal to the data type of the parsed attribute.
 
@@ -520,14 +519,6 @@ SNAKY_API size_t snaky_count_attribs(const char *str);
   "< some_str = {  MY STRING   } >"
 */
 SNAKY_API bool snaky_is_string(const char *str);
-/**
-  Determines if an attribute is an object.
-
-  Object attributes must be in this format:
-
-  "< my_obj = {< field1 = 0, field2 = 0, ... >}>"
-*/
-SNAKY_API bool snaky_is_object(const char *str);
 /**
   Determines if the given string is the beginning
   of an attribute string.
@@ -684,7 +675,7 @@ SNAKY_API double snaky_parse_double(const char *origin, const char *str, int *ou
   Similarly to other snaky_parse_[type] functions, this function
   parses a generic value based on a target data type. More specifically,
   this function is intended for numerical expressions. The
-  SNAKY_OBJECT, SNAKY_ARRAY, and SNAKY_STRING data types
+  SNAKY_ATTRIB_STRING, SNAKY_ARRAY, and SNAKY_STRING data types
   are not supported in this function. For these 3 types, you
   should use the snaky_parse_target_attrib...(...) functions instead.
 
