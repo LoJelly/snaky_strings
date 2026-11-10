@@ -26,7 +26,9 @@
 #define OBJ_FIELD_DELIM '.'
 #define EXPR_OPENING '('
 #define EXPR_CLOSING ')'
-#define STR_MARKER '"'
+// strings can be created using "string" or 'string'
+#define STR_MARKER_1 '"'
+#define STR_MARKER_2 '\''
 
 static bool init = false;
 
@@ -376,23 +378,28 @@ static const char *find_end_of_group_str(const char *start, const char *open, co
 }
 static const char *find_end_of_str(const char *start)
 {
-	// the first char should be '"', now move until the matching '"' is found
-	if(*start != '"')
+	// the first char should be " or ', now move until the matching string marker is found
+	bool search_for_double_quotes = false, search_for_single_quote = false;
+	if(*start == '"')
+		search_for_double_quotes = true;
+	else if(*start == '\'')
+		search_for_single_quote = true;
+	else
 		return NULL;
 
 	for(const char *p = start; *p; ++p)
 	{
-		// skip any instances of '\"'
+		// skip any instances of '\"' or '\'' depending on current string marker
 		if(*p == '\\')
 		{
-			if(*(p + 1) == '"')
+			if(*(p + 1) == '"' || *(p + 1) == '\'')
 			{
-				// skip the entire '\"' string
+				// skip the entire '\"' or '\''string
 				p += 2;
 				continue;
 			}
 		}
-		else if(*p == '"')
+		else if((search_for_double_quotes && *p == '"') || (search_for_single_quote && *p == '\''))
 		{
 			// p will point to char directly after the matching closing character
 			return p + 1;
@@ -547,7 +554,8 @@ static int resolve_data_type(const char *start, snaky_data_type *out_data_type, 
 	}
 	else
 	{
-		vl_log(VL_ERROR, "Unknown or missing data type in string: '%s'! Defaulting to SNAKY_STRING!\n", origin);
+		//TODO FIXME re-introduce this warning/error?
+		//vl_log(VL_WARNING, "Unknown or missing data type in string: '%s'! Defaulting to SNAKY_STRING!\n", origin);
 
 		// default to the string type when no type is given
 		*out_data_type = SNAKY_STRING;
@@ -565,7 +573,7 @@ static void trim_trailing_whitespace_from_value(snaky_string *sbuffer, char *buf
 	char *end_of_str = buf + strlen(buf) - 1;
 
 	// if a valid string, do not trim
-	if(*buf == STR_MARKER && find_end_of_str(buf) != NULL)
+	if((*buf == STR_MARKER_1 || *buf == STR_MARKER_2) && find_end_of_str(buf) != NULL)
 		return;
 
 	// otherwise, trim:
@@ -578,7 +586,23 @@ static void trim_trailing_whitespace_from_value(snaky_string *sbuffer, char *buf
 	if(end_of_str != start_of_str)
 		*(end_of_str + 1) = '\0';
 }
-static int parse_value(const char *str_origin, const char *value_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_start_pos, const char *(*end_pos_fn)(const char*))
+static void return_next_start_pos(const char *attribs_start, const char **out_next_start_pos)
+{
+	if(out_next_start_pos)
+	{
+		while(*attribs_start && *attribs_start != ATTRIB_DELIM && strncmp(attribs_start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0)
+			attribs_start++;
+
+		if(!*attribs_start)
+			*out_next_start_pos = NULL;
+		else
+		{
+			skip_whitespace(&attribs_start, NULL);
+			*out_next_start_pos = attribs_start;
+		}
+	}
+}
+static int parse_value(const char *str_origin, const char *value_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, const char *(*end_pos_fn)(const char*))
 {
 	const char *end_pos = NULL;
 	if(end_pos_fn)
@@ -602,8 +626,8 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 	}
 
 	// out_start_pos should point to first char in value string
-	if(out_start_pos)
-		*out_start_pos = value_start;
+	if(out_curr_start_pos)
+		*out_curr_start_pos = value_start;
 
 	size_t i = 0;
 	while(*value_start && value_start != end_pos)
@@ -616,7 +640,7 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 					return 0;
 			}
 		}
-		else
+		else if(buffer && buffer_size > 0)
 			if(i + 1 >= buffer_size)
 				break;
 
@@ -624,7 +648,7 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 
 		if(sbuffer)
 			sbuffer->data[i++] = next;
-		else if(buffer)
+		else if(buffer && buffer_size > 0)
 			buffer[i++] = next;
 	}
 
@@ -636,11 +660,73 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 	// see if trailing whitespace should be removed from value (example: "..., end_value = 827    >")
 	trim_trailing_whitespace_from_value(sbuffer, buffer);
 
+	// if next start pos queried, return it
+	return_next_start_pos(value_start, out_next_start_pos);
+
+	return 1;
+}
+static int parse_array_element(const char *str_origin, const char *array_start, const char *elem_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos)
+{
+	// find end of array in original string
+	const char *array_end = find_end_of_array(array_start);
+	if(!array_end)
+	{
+		vl_log(VL_ERROR, "Expected '%c' at end of array: '%s'!\n", ARR_CLOSING, array_start);
+		return 0;
+	}
+
+	// do not include the closing ']' in the element's value
+	array_end--;
+
+	// current value start of an array is always the opening '['
+	if(out_curr_start_pos)
+		*out_curr_start_pos = array_start;
+
+	// save original pos of array
+	const char *array_origin = array_start;
+
+	// move array_start to the position of the element within the array
+	array_start = elem_start;
+
+	// parse current value until the next array elem delimiter is found
+	size_t i = 0;
+	while(*array_start && array_start != array_end && *array_start != ARR_ELEM_DELIM)
+	{
+		// copy all the contents in this subregion of the array
+		if(sbuffer)
+		{
+			if(i + 1 >= sbuffer->size)
+			{
+				if(!snaky_realloc_str(sbuffer, sbuffer->size + STR_CAPACITY_INCREASE))
+					return 0;
+			}
+		}
+		else if(buffer && buffer_size > 0)
+			if(i + 1 >= buffer_size)
+				break;
+
+		// get next char in original string
+		char next = *array_start++;
+
+		if(sbuffer)
+			sbuffer->data[i++] = next;
+		else if(buffer && buffer_size > 0)
+			buffer[i++] = next;
+	}
+
+	if(sbuffer)
+		sbuffer->data[i] = '\0';
+	else if(buffer && buffer_size > 0)
+		buffer[i] = '\0';
+
+	// obtain next attribute pos (note that this is not the next element pos within the array, but the next attribute)
+	return_next_start_pos(array_origin, out_next_start_pos);
+
 	return 1;
 }
 
 // if using a snaky_string, 'sbuffer' won't be NULL, but if using a normal stack-allocated buffer, it will be NULL
-static int parse_target_attrib(const char *str_origin, const char *attribs_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *attrib_name, size_t attrib_len, const char **out_start_pos, snaky_data_type *out_data_type)
+static int parse_target_attrib(const char *str_origin, const char *attribs_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *attrib_name, size_t attrib_len, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type)
 {
 	skip_whitespace(&attribs_start, NULL);
 
@@ -668,19 +754,19 @@ static int parse_target_attrib(const char *str_origin, const char *attribs_start
 	{
 		if(out_data_type)
 			*out_data_type = SNAKY_ATTRIB_STRING;
-		return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_start_pos, find_end_of_attribs);
+		return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_curr_start_pos, out_next_start_pos, find_end_of_attribs);
 	}
 	else if(*attribs_start == ARR_OPENING)
 	{
 		if(out_data_type)
 			*out_data_type = SNAKY_ARRAY;
-		return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_start_pos, find_end_of_array);
+		return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_curr_start_pos, out_next_start_pos, find_end_of_array);
 	}
 
 	// if not a nested string, copy the attrib value normally (no end_pos_fn for a normal value)
-	return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_start_pos, NULL);
+	return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_curr_start_pos, out_next_start_pos, NULL);
 }
-static int prepare_parse_target_attrib(const char *str, const char *attrib_name, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
+static int prepare_parse_target_attrib(const char *str, const char *attrib_name, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type)
 {
 	const char *str_origin = str;
 
@@ -768,7 +854,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 	{
 		if(sbuffer)
 		{
-			if(!snaky_parse_target_attrib_str(str, substrings[s], sbuffer, out_start_pos, out_data_type))
+			if(!snaky_parse_target_attrib_str(str, substrings[s], sbuffer, out_curr_start_pos, out_next_start_pos, out_data_type))
 			{
 				vl_log(VL_ERROR, "Failed to parse substring attribute: '%s' in string '%s'\n", substrings[s], str);
 				return 0;
@@ -776,7 +862,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		}
 		else if(buffer && buffer_size > 0)
 		{
-			if(!snaky_parse_target_attrib_buf(str, substrings[s], buffer, buffer_size, out_start_pos, out_data_type))
+			if(!snaky_parse_target_attrib_buf(str, substrings[s], buffer, buffer_size, out_curr_start_pos, out_next_start_pos, out_data_type))
 			{
 				vl_log(VL_ERROR, "Failed to parse substring attribute: '%s' in string '%s'\n", substrings[s], str);
 				return 0;
@@ -871,7 +957,10 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 
 					// when the current index matches the target index:
 					if(curr_index == index)
-						return parse_value(str_origin, array_start, sbuffer, buffer, buffer_size, out_start_pos, find_end_of_array);
+					{
+						vl_log(VL_DEBUG, "curr_index = %zu, index = %d\n", curr_index, index);
+						return parse_array_element(str_origin, array_start, p, sbuffer, buffer, buffer_size, out_curr_start_pos, out_next_start_pos);
+					}
 				}
 
 				if(curr_index < index)
@@ -926,7 +1015,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 			if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
 			{
 				resolve_data_type(attribs_start, out_data_type, NULL);
-				return parse_target_attrib(str_origin, attribs_start, sbuffer, buffer, buffer_size, attrib_name, attrib_len, out_start_pos, out_data_type);
+				return parse_target_attrib(str_origin, attribs_start, sbuffer, buffer, buffer_size, attrib_name, attrib_len, out_curr_start_pos, out_next_start_pos, out_data_type);
 			}
 
 			continue;
@@ -950,7 +1039,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 			if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
 			{
 				resolve_data_type(attribs_start, out_data_type, NULL);
-				return parse_target_attrib(str_origin, attribs_start, sbuffer, buffer, buffer_size, attrib_name, attrib_len, out_start_pos, out_data_type);
+				return parse_target_attrib(str_origin, attribs_start, sbuffer, buffer, buffer_size, attrib_name, attrib_len, out_curr_start_pos, out_next_start_pos, out_data_type);
 			}
 
 			continue;
@@ -959,16 +1048,16 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 
 	return 0;
 }
-int snaky_parse_target_attrib_buf(const char *str, const char *attrib_name, char *buffer, size_t buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
+int snaky_parse_target_attrib_buf(const char *str, const char *attrib_name, char *buffer, size_t buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type)
 {
-	return prepare_parse_target_attrib(str, attrib_name, NULL, buffer, buffer_size, out_start_pos, out_data_type);
+	return prepare_parse_target_attrib(str, attrib_name, NULL, buffer, buffer_size, out_curr_start_pos, out_next_start_pos, out_data_type);
 }
-int snaky_parse_target_attrib_str(const char *str, const char *attrib_name, snaky_string *buffer, const char **out_start_pos, snaky_data_type *out_data_type)
+int snaky_parse_target_attrib_str(const char *str, const char *attrib_name, snaky_string *buffer, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type)
 {
-	return prepare_parse_target_attrib(str, attrib_name, buffer, NULL, 0, out_start_pos, out_data_type);
+	return prepare_parse_target_attrib(str, attrib_name, buffer, NULL, 0, out_curr_start_pos, out_next_start_pos, out_data_type);
 }
 
-static int parse_attrib(const char *str_origin, const char *attribs_start, snaky_string *name_str, snaky_string *value_str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
+static int parse_attrib(const char *str_origin, const char *attribs_start, snaky_string *name_str, snaky_string *value_str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type)
 {
 	skip_whitespace(&attribs_start, NULL);
 
@@ -1041,21 +1130,21 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 		return 0;
 	}
 
-	// out_start_pos should point to first char in the value string
-	if(out_start_pos)
-		*out_start_pos = attribs_start;
+	// out_curr_start_pos should point to first char in the value string
+	if(out_curr_start_pos)
+		*out_curr_start_pos = attribs_start;
 
 	if(*attribs_start == ARR_OPENING)
 	{
 		if(out_data_type)
 			*out_data_type = SNAKY_ARRAY;
-		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, out_start_pos, find_end_of_array);
+		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, out_curr_start_pos, out_next_start_pos, find_end_of_array);
 	}
-	else if(*attribs_start == STR_MARKER)
+	else if(*attribs_start == STR_MARKER_1 || *attribs_start == STR_MARKER_2)
 	{
 		if(out_data_type)
 			*out_data_type = SNAKY_STRING;
-		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, out_start_pos, find_end_of_str);
+		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, out_curr_start_pos, out_next_start_pos, find_end_of_str);
 	}
 
 	// if not a nested string, copy the attrib value normally
@@ -1091,13 +1180,16 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 	else if(value_str)
 		value_str->data[i] = '\0';
 
+	// return next start pos
+	return_next_start_pos(attribs_start, out_next_start_pos);
+
 	// default to string here
 	if(!data_type_resolved && out_data_type)
 		*out_data_type = SNAKY_STRING;
 
 	return 1;
 }
-static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_string *value_str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
+static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_string *value_str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type)
 {
 	const char *str_origin = str;
 
@@ -1113,10 +1205,10 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 
 		// see if the first char in the string is just a letter
 		if(isalpha(c))
-			return parse_attrib(str_origin, p, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_start_pos, out_data_type);
+			return parse_attrib(str_origin, p, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_curr_start_pos, out_next_start_pos, out_data_type);
 
-		// if the first char is a group indicator, skip the string entirely
-		if(c == STR_MARKER)
+		// if the first char is a string marker, skip the string entirely
+		if(c == STR_MARKER_1 || c == STR_MARKER_2)
 		{
 			const char *start_of_str = p;
 
@@ -1148,7 +1240,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 				return 0;
 			}
 
-			return parse_attrib(str_origin, attribs_start, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_start_pos, out_data_type);
+			return parse_attrib(str_origin, attribs_start, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_curr_start_pos, out_next_start_pos, out_data_type);
 		}
 
 		// parse the very next attrib found
@@ -1164,7 +1256,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 				return 0;
 			}
 
-			return parse_attrib(str_origin, attribs_start, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_start_pos, out_data_type);
+			return parse_attrib(str_origin, attribs_start, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_curr_start_pos, out_next_start_pos, out_data_type);
 		}
 
 		// nested attributes are skipped
@@ -1189,13 +1281,13 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 
 	return 0;
 }
-int snaky_parse_attrib_buf(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type)
+int snaky_parse_attrib_buf(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type)
 {
-	return prepare_parse_attrib(str, NULL, NULL, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_start_pos, out_data_type);
+	return prepare_parse_attrib(str, NULL, NULL, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_curr_start_pos, out_next_start_pos, out_data_type);
 }
-int snaky_parse_attrib_str(const char *str, snaky_string *name_str, snaky_string *value_str, const char **out_start_pos, snaky_data_type *out_data_type)
+int snaky_parse_attrib_str(const char *str, snaky_string *name_str, snaky_string *value_str, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type)
 {
-	return prepare_parse_attrib(str, name_str, value_str, NULL, 0, NULL, 0, out_start_pos, out_data_type);
+	return prepare_parse_attrib(str, name_str, value_str, NULL, 0, NULL, 0, out_curr_start_pos, out_next_start_pos, out_data_type);
 }
 
 int snaky_remove_attrib_buf(char *str, const char *attrib_name)
@@ -1208,7 +1300,7 @@ int snaky_remove_attrib_buf(char *str, const char *attrib_name)
 	// see if the attrib is found
 	const char *start_pos = NULL;
 	char attrib_value[SNAKY_BUF_SIZE];
-	if(!snaky_parse_target_attrib_buf(str, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
+	if(!snaky_parse_target_attrib_buf(str, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL, NULL))
 	{
 		vl_log(VL_ERROR, "The '%s' attribute was not found in this string: '%s'!\n", attrib_name, str);
 		return 0;
@@ -1253,7 +1345,7 @@ int snaky_remove_attrib_str(snaky_string *str, const char *attrib_name)
 	// see if the attrib is found
 	const char *start_pos = NULL;
 	char attrib_value[SNAKY_BUF_SIZE];
-	if(!snaky_parse_target_attrib_buf(str->data, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
+	if(!snaky_parse_target_attrib_buf(str->data, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL, NULL))
 	{
 		vl_log(VL_ERROR, "The '%s' attribute was not found in this string: '%s'!\n", attrib_name, str);
 		return 0;
@@ -1315,7 +1407,7 @@ int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name,
 	const char *start_pos = NULL;
 
 	char attrib_value[SNAKY_BUF_SIZE];
-	if(snaky_parse_target_attrib_buf(buf, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
+	if(snaky_parse_target_attrib_buf(buf, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL, NULL))
 	{
 		edit_pos = (char*) start_pos;
 		// curr_len is equal to length of the found attribute value
@@ -1377,7 +1469,7 @@ int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name,
 		const char *origin = buf;
 		while(*buf && strncmp(buf, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0)
 		{
-			if(*buf == STR_MARKER)
+			if(*buf == STR_MARKER_1 || *buf == STR_MARKER_2)
 			{
 				const char *end_of_str = find_end_of_str(buf);
 				if(!end_of_str)
@@ -1447,7 +1539,7 @@ int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char 
 	const char *start_pos = NULL;
 
 	char attrib_value[SNAKY_BUF_SIZE];
-	if(snaky_parse_target_attrib_buf(str->data, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL))
+	if(snaky_parse_target_attrib_buf(str->data, attrib_name, attrib_value, sizeof(attrib_value), &start_pos, NULL, NULL))
 	{
 		edit_pos = (char*) start_pos;
 		// curr_len is equal to length of the found attribute value
@@ -1589,7 +1681,7 @@ bool snaky_is_string(const char *str)
 		return false;
 
 	// make sure string starts with '"'
-	bool valid_start = *str && *str == STR_MARKER;
+	bool valid_start = *str && (*str == STR_MARKER_1 || *str == STR_MARKER_2);
 
 	// find the matching '}'
 	const char *end_pos = find_end_of_str(str);
@@ -1710,21 +1802,17 @@ int snaky_generate_attrib_map(const char *str, snaky_attrib_map *map)
 		return 0;
 	}
 
-	const char *start_pos = str;
-	while(start_pos && snaky_parse_attrib_str(start_pos, &name, &value, NULL, NULL))
+	const char *next_start_pos = str;
+	while(next_start_pos && snaky_parse_attrib_str(next_start_pos, &name, &value, NULL, &next_start_pos, NULL))
 	{
-		// move start_pos to next found attribute:
-		while(*start_pos && *start_pos != ATTRIB_DELIM && strncmp(start_pos, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0)
-			start_pos++;
-
-		if(!*start_pos)
+		if(!*next_start_pos)
 		{
 			snaky_free_str(&name);
 			snaky_free_str(&value);
 			return 0;
 		}
 		else
-			skip_whitespace(&start_pos, NULL);
+			skip_whitespace(&next_start_pos, NULL);
 
 		dynmaps_set_strkeyval(map, name.data, value.data);
 		if(map->alloc_failure)
@@ -1761,9 +1849,9 @@ int snaky_generate_attrib_list(const char *str, snaky_attrib_list *list)
 		return 0;
 	}
 
-	const char *start_pos = str;
+	const char *next_start_pos = str;
 	snaky_data_type data_type = SNAKY_INVALID;
-	while(start_pos && snaky_parse_attrib_str(start_pos, &name, &value, &start_pos, &data_type))
+	while(next_start_pos && snaky_parse_attrib_str(next_start_pos, &name, &value, NULL, &next_start_pos, &data_type))
 	{
 		snaky_attrib_entry entry = {0};
 		if(!snaky_prepare_str(&entry.name, SNAKY_BUF_SIZE))
@@ -2077,7 +2165,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 		// try to parse as a target attribute:
 		char attrib[SNAKY_BUF_SIZE];
 		snaky_data_type data_type = SNAKY_INVALID;
-		if(snaky_parse_target_attrib_buf(origin, attrib_name, attrib, sizeof(attrib), NULL, &data_type))
+		if(snaky_parse_target_attrib_buf(origin, attrib_name, attrib, sizeof(attrib), NULL, NULL, &data_type))
 		{
 			// if the attrib is an invalid type, no value can be parsed
 			if(data_type == SNAKY_ARRAY)
@@ -2469,7 +2557,7 @@ void snaky_parse_value(const char *origin, const char *str, snaky_data_type targ
 	if(*out_success == 0)
 		vl_log(VL_ERROR, "Failed to parse string value: '%s'!\n", str);
 }
-void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, const char **out_start_pos, int *out_success)
+void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, const char **out_curr_start_pos, const char **out_next_start_pos, int *out_success)
 {
 	if(!out_success)
 	{
@@ -2485,7 +2573,7 @@ void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, s
 		return;
 
 	snaky_data_type resolved_type = SNAKY_INVALID;
-	if(snaky_parse_target_attrib_str(str, attrib_name, &attrib, out_start_pos, &resolved_type))
+	if(snaky_parse_target_attrib_str(str, attrib_name, &attrib, out_curr_start_pos, out_next_start_pos, &resolved_type))
 	{
 		if(resolved_type == SNAKY_INVALID)
 			resolved_type = target_type;

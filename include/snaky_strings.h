@@ -397,26 +397,30 @@ SNAKY_API int snaky_realloc_str(snaky_string *str, size_t bytes);
   If this is NULL, then the function will only return
   whether or not the attribute was found.
   @param buffer_size The size of 'buffer' in bytes.
-  @param out_start_pos A pointer to a const char*. If a valid pointer
+  @param out_curr_start_pos A pointer to a const char*. If a valid pointer
   is given, it will be equal to the position in the original
   string where the parsed attribute's value starts. If the attribute is not
   found, then the pointer will be equal to NULL.
+  @param out_next_start_pos A pointer to a const char*. If a valid pointer
+  is given, it will be equal to the position in the original
+  string where the next attribute starts, unless there is no next attribute
+  found, and then it will be equal to NULL.
   @param out_data_type A pointer to a snaky_data_type. If a valid pointer
   is given, it will be equal to the data type of the parsed attribute.
 
   @return 1 if the attribute was successfully parsed/found, 0 if the
   function fails in any way.
 */
-SNAKY_API int snaky_parse_target_attrib_buf(const char *str, const char *attrib_name, char *buffer, size_t buffer_size, const char **out_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_target_attrib_buf(const char *str, const char *attrib_name, char *buffer, size_t buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type);
 /**
   Same as snaky_parse_target_attrib(...) but uses a snaky_string instead
   of a char buffer.
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_parse_target_attrib_buf(const char*, char*, size_t, const char*, const char**, snaky_data_type*)
+  @see snaky_parse_target_attrib_buf(const char*, char*, size_t, const char*, const char**, const char**, snaky_data_type*)
 */
-SNAKY_API int snaky_parse_target_attrib_str(const char *str, const char *attrib_name, snaky_string *buffer, const char **out_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_target_attrib_str(const char *str, const char *attrib_name, snaky_string *buffer, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type);
 /**
   Searches the given string for the very next attribute and tries to parse its value.
 
@@ -432,16 +436,16 @@ SNAKY_API int snaky_parse_target_attrib_str(const char *str, const char *attrib_
   to determine the type of the value. Because of this, it will never assume the SNAKY_DOUBLE
   or SNAKY_CHAR types. It can only ever assume SNAKY_BOOL, SNAKY_INT, or SNAKY_FLOAT.
 
-  @see snaky_parse_target_attrib(const char*, char*, size_t, const char*, const char**, snaky_data_type*)
+  @see snaky_parse_target_attrib_buf(const char*, char*, size_t, const char*, const char**, const char**, snaky_data_type*)
 */
-SNAKY_API int snaky_parse_attrib_buf(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_attrib_buf(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type);
 /**
   Same as snaky_parse_attrib(...) but uses snaky_strings for the name and value
   char buffers.
 
-  @see snaky_parse_attrib(const char*, char*, size_t, char*, size_t, const char**, snaky_data_type*)
+  @see snaky_parse_attrib_buf(const char*, char*, size_t, char*, size_t, const char**, const char**, snaky_data_type*)
 */
-SNAKY_API int snaky_parse_attrib_str(const char *str, snaky_string *name_str, snaky_string *value_str, const char **out_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_attrib_str(const char *str, snaky_string *name_str, snaky_string *value_str, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type);
 
 /**
   Searches the given string for a specific attribute and removes it entirely.
@@ -696,7 +700,7 @@ SNAKY_API double snaky_parse_double(const char *origin, const char *str, int *ou
   or not the function succeeded. It will be equal to 1 if it
   succeeded, and 0 if it failed.
 
-  @see snaky_parse_target_attrib_value(const char*, const char*, snaky_data_type, void*, const char**, int*)
+  @see snaky_parse_target_attrib_value(const char*, const char*, snaky_data_type, void*, const char**, const char**, int*)
 */
 SNAKY_API void snaky_parse_value(const char *origin, const char *str, snaky_data_type target_type, void *out_value, int *out_success);
 /**
@@ -706,9 +710,8 @@ SNAKY_API void snaky_parse_value(const char *origin, const char *str, snaky_data
   @note The SNAKY_AUTO data type works in this function.
 
   @see snaky_parse_value(const char*, snaky_data_type, void*, int*)
-  @see snaky_parse_target_attrib(const char*, char*, size_t, const char*, const char**)
 */
-SNAKY_API void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, const char **out_start_pos, int *out_success);
+SNAKY_API void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, const char **out_curr_start_pos, const char **out_next_start_pos, int *out_success);
 /**
   Parses a data type into a string.
 
