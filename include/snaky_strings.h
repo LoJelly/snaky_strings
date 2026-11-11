@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SNAKY_STRINGS_H
+#define SNAKY_STRINGS_H
 
 #ifdef _WIN32
 	#ifdef SNAKY_DLL
@@ -62,6 +63,10 @@
   is equal to this value.
 */
 #define SNAKY_MAX_SUBSTRINGS 32
+/**
+  The max amount of dimensions a single array can have.
+*/
+#define SNAKY_MAX_ARR_DIMENSIONS 12
 /**
   When defining custom functions using snaky_func functions,
   this value represents the maximum value of arguments that
@@ -885,3 +890,5 @@ SNAKY_API int snaky_define_function(const char *str, snaky_data_type return_type
   Sets the key used when encrypting strings.
 */
 SNAKY_API void snaky_set_encryption_key(int k);
+
+#endif // SNAKY_STRINGS_H

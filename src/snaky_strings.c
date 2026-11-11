@@ -665,32 +665,176 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 
 	return 1;
 }
-static int parse_array_element(const char *str_origin, const char *array_start, const char *elem_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos)
+static int find_array_element(const char *array_start, const char *array_end, const int *indices, size_t num_indices, size_t depth, const char **out_elem_start)
 {
-	// find end of array in original string
-	const char *array_end = find_end_of_array(array_start);
-	if(!array_end)
-	{
-		vl_log(VL_ERROR, "Expected '%c' at end of array: '%s'!\n", ARR_CLOSING, array_start);
+	// this function tracks depth levels between nested arrays and finds the desired element:
+
+	if(depth >= num_indices)
 		return 0;
+
+	const char *p = array_start + 1;
+	size_t curr_index = 0;
+
+	while(p < array_end)
+	{
+		skip_whitespace(&p, NULL);
+
+		if(p >= array_end)
+			break;
+
+		const char *elem_start = p;
+		const char *elem_end = NULL;
+
+		// when a new array is opened:
+		if(*p == ARR_OPENING)
+		{
+			size_t depth = 0;
+
+			do
+			{
+				// track nested arrays within that first array:
+				if(*p == ARR_OPENING)
+					depth++;
+				else if(*p == ARR_CLOSING)
+					depth--;
+
+				p++;
+			}
+			while(p < array_end && depth > 0);
+
+			// if the depth is mismatched, error out
+			if(depth != 0)
+				return 0;
+
+			// new elem_end is end of that last parsed array
+			elem_end = p - 1;
+		}
+		// when the current char is not the start of a new array:
+		else
+		{
+			// go to the end of the next full element (counts nested arrays too)
+			while(p < array_end && *p != ARR_ELEM_DELIM && *p != ARR_CLOSING)
+				p++;
+
+			elem_end = p - 1;
+
+			// trim trailing whitespace on elem_end
+			while(elem_end >= elem_start && isspace((unsigned char) *elem_end))
+				elem_end--;
+		}
+
+		// do not allow negative indices
+		if(indices[depth] < 0)
+			return 0;
+
+		// when the indices match:
+		if(curr_index == (size_t) indices[depth])
+		{
+			// if depth matches the exact number of indices, a single element is being parsed
+			if(depth + 1 == num_indices)
+			{
+				*out_elem_start = elem_start;
+				return 1;
+			}
+
+			// otherwise, a nested array will be parsed:
+			if(*elem_start != ARR_OPENING)
+				return 0;
+
+			// recursively re-find the desired element or nested array:
+			return find_array_element(elem_start, elem_end, indices, num_indices, depth + 1, out_elem_start);
+		}
+
+		curr_index++;
+
+		p = elem_end + 1;
+
+		skip_whitespace(&p, NULL);
+
+		if(p < array_end && *p == ARR_ELEM_DELIM)
+			p++;
 	}
 
-	// do not include the closing ']' in the element's value
+	return 0;
+}
+static int parse_array_element(const char *str_origin, const char *array_start, const char *array_end, const char *elem_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos)
+{
+	// save original pos of array
+	const char *array_origin = array_start;
+
+	// push array_end back until a non ']' char is found
 	array_end--;
+	while(*array_end && *array_end == ARR_CLOSING)
+		array_end--;
+	// push end pointer one slot forward so last element is fully parsed
+	array_end++;
+
+	// see if the array is empty (user declared like '[]' or with whitespace: '[   ]')
+	array_start++;
+	skip_whitespace(&array_start, NULL);
+	if(array_start == array_end)
+	{
+		vl_log(VL_ERROR, "An empty array was encountered, cannot parse elements! String: '%s'!\n", str_origin);
+		return 0;
+	}
 
 	// current value start of an array is always the opening '['
 	if(out_curr_start_pos)
 		*out_curr_start_pos = array_start;
 
-	// save original pos of array
-	const char *array_origin = array_start;
-
 	// move array_start to the position of the element within the array
 	array_start = elem_start;
 
+	/*
+	   if the beginning of the array is another array, see if the
+	   parsed element should be a nested array
+	*/
+	if(*array_start == ARR_OPENING)
+	{
+		// copy the entire nested array into the chosen buffer
+		const char *nested_array_end = find_end_of_array(array_start);
+		if(!nested_array_end)
+		{
+			vl_log(VL_ERROR, "No end of array found: '%s'!\n", array_start);
+			return 0;
+		}
+
+		size_t i = 0;
+		while(*array_start && array_start != nested_array_end)
+		{
+			if(sbuffer)
+			{
+				if(i + 1 >= sbuffer->size)
+				{
+					if(!snaky_realloc_str(sbuffer, sbuffer->size + STR_CAPACITY_INCREASE))
+						return 0;
+				}
+			}
+			else if(buffer && buffer_size > 0)
+				if(i + 1 >= buffer_size)
+					break;
+
+			char next = *array_start++;
+
+			if(sbuffer)
+				sbuffer->data[i++] = next;
+			else if(buffer && buffer_size > 0)
+				buffer[i++] = next;
+		}
+
+		if(sbuffer)
+			sbuffer->data[i] = '\0';
+		else if(buffer && buffer_size > 0)
+			buffer[i] = '\0';
+
+		return_next_start_pos(array_origin, out_next_start_pos);
+
+		return 1;
+	}
+
 	// parse current value until the next array elem delimiter is found
 	size_t i = 0;
-	while(*array_start && array_start != array_end && *array_start != ARR_ELEM_DELIM)
+	while(*array_start && array_start != array_end && *array_start != ARR_ELEM_DELIM && *array_start != ARR_CLOSING)
 	{
 		// copy all the contents in this subregion of the array
 		if(sbuffer)
@@ -766,6 +910,221 @@ static int parse_target_attrib(const char *str_origin, const char *attribs_start
 	// if not a nested string, copy the attrib value normally (no end_pos_fn for a normal value)
 	return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, out_curr_start_pos, out_next_start_pos, NULL);
 }
+static int parse_dimensions(const char *str_origin, const char *attrib_name, size_t attrib_name_len, size_t *out_dimensions, size_t *out_num_dimensions)
+{
+	*out_num_dimensions = 0;
+
+	// track nested array info
+	size_t comma_counts[SNAKY_MAX_ARR_DIMENSIONS] = {0};
+	int has_elements[SNAKY_MAX_ARR_DIMENSIONS] = {0};
+
+	// track dimension info
+	size_t dimension_counts[SNAKY_MAX_ARR_DIMENSIONS] = {0};
+	int dimension_seen[SNAKY_MAX_ARR_DIMENSIONS] = {0};
+
+	// depth is used to track the current nested array
+	size_t depth = 0;
+	// max_depth tracks the most amount of nested arrays currently found
+	size_t max_depth = 0;
+
+	// TODO add empty element validation (ex.: [0,,1] should fail)?
+
+	const char *array_start = NULL;
+	for(const char *p = str_origin; *p; ++p)
+	{
+		// find the name of the array
+		if(strncmp(p, attrib_name, attrib_name_len) == 0)
+		{
+			array_start = p;
+
+			// jump to end of array name
+			p += attrib_name_len;
+
+			skip_whitespace(&p, NULL);
+
+			// move until the first '[' is found
+			while(*p && *p != ARR_OPENING)
+				p++;
+
+			skip_whitespace(&p, NULL);
+
+			// now p should point to the first '['
+			if(!*p)
+			{
+				vl_log(VL_ERROR, "Expected '%c' in array: '%s'!\n", ARR_OPENING, array_start);
+				return 0;
+			}
+
+			// parse dimensions and commas:
+			while(*p)
+			{
+				skip_whitespace(&p, NULL);
+
+				if(!*p)
+				{
+					vl_log(VL_ERROR, "Unexpected termination of array string: '%s'!\n", array_start);
+					return 0;
+				}
+
+				// when a new array is opened:
+				if(*p == ARR_OPENING)
+				{
+					// make sure the max amount of dimensions is not crossed
+					if(depth >= SNAKY_MAX_ARR_DIMENSIONS)
+					{
+						vl_log(VL_ERROR, "Max number of array dimensions reached: '%s'!\n", array_start);
+						return 0;
+					}
+
+					// when depth is at least 1, this array has elements
+					if(depth > 0)
+						has_elements[depth - 1] = 1;
+
+					// reset counts and statuses for the new array
+					comma_counts[depth] = 0;
+					has_elements[depth] = 0;
+
+					// a new array means depth must be incremented
+					depth++;
+
+					// if max depth is reached, make that depth the new max depth
+					if(depth > max_depth)
+						max_depth = depth;
+
+					p++;
+					continue;
+				}
+
+				// when a comma is encountered:
+				if(*p == ARR_ELEM_DELIM)
+				{
+					// if no arrays have been found yet, error out
+					if(depth == 0)
+					{
+						vl_log(VL_ERROR, "Empty array encountered: '%s'!\n", array_start);
+						return 0;
+					}
+
+					// the array at this depth gains a comma count
+					comma_counts[depth - 1]++;
+
+					p++;
+					continue;
+				}
+
+				// when a ']' is encountered:
+				if(*p == ARR_CLOSING)
+				{
+					// if no arrays have been found yet, error out
+					if(depth == 0)
+					{
+						vl_log(VL_ERROR, "Empty array encountered: '%s'!\n", array_start);
+						return 0;
+					}
+
+					// go back one level
+					depth--;
+
+					// count amount of elements in the array just parsed:
+					size_t elem_count = 0;
+
+					// if it had any elements:
+					if(has_elements[depth])
+						// the amount of elements is the amount of commas + 1
+						elem_count = comma_counts[depth] + 1;
+
+					if(dimension_seen[depth])
+					{
+						// enforce that every array has the same amount of elements:
+						if(dimension_counts[depth] != elem_count)
+						{
+							vl_log(VL_ERROR, "Array size does not match other dimensions: '%s'!\n", array_start);
+							return 0;
+						}
+					}
+					else
+					{
+						// save this dimension info for the parsed nested array
+						dimension_counts[depth] = elem_count;
+						dimension_seen[depth] = 1;
+					}
+
+					p++;
+
+					// at the end of parsing, depth of 0 means all arrays were successfully parsed
+					if(depth == 0)
+					{
+						// now copy the dimensions info into the output args:
+						for(size_t i = 0; i < max_depth; ++i)
+							out_dimensions[i] = dimension_counts[i];
+
+						*out_num_dimensions = max_depth;
+
+						return 1;
+					}
+
+					continue;
+				}
+
+				// on any other character, a depth of 0 means an element was encountered
+				if(depth == 0)
+					return 0;
+
+				has_elements[depth - 1] = 1;
+
+				p++;
+			}
+
+			vl_log(VL_ERROR, "Unexpected termination of array string: '%s'!\n", array_start);
+			return 0;
+		}
+	}
+
+	if(array_start)
+		vl_log(VL_ERROR, "Failed to parse dimensions in array: '%s'!\n", array_start);
+	return 0;
+}
+static size_t parse_index(const char *str_origin, const char **index_values, size_t num_indices, size_t *dimensions, size_t num_dimensions, int *out_success)
+{
+	// default to failure status
+	*out_success = 0;
+
+	// make sure invalid array elements won't be read later
+	if(num_indices == 0 || num_indices > num_dimensions)
+		return 0;
+
+	// parse each individual index and add to final_index
+	size_t final_index = 0;
+	for(size_t i = 0; i < num_indices; ++i)
+	{
+		int idx = snaky_parse_int(str_origin, index_values[i], out_success);
+		if(*out_success == 0)
+			return 0;
+
+		if(idx < 0 || (size_t) idx >= dimensions[i])
+		{
+			*out_success = 0;
+			return 0;
+		}
+
+		if(dimensions[i] == 0)
+		{
+			*out_success = 0;
+			return 0;
+		}
+
+		if(final_index > (SIZE_MAX - (size_t) idx) / dimensions[i])
+		{
+			*out_success = 0;
+			return 0;
+		}
+
+		final_index = final_index * dimensions[i] + (size_t) idx;
+	}
+
+	*out_success = 1;
+	return final_index;
+}
 static int prepare_parse_target_attrib(const char *str, const char *attrib_name, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type)
 {
 	const char *str_origin = str;
@@ -781,14 +1140,14 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 
 	// see if user is trying to find a nested attribute :
 	char substrings[SNAKY_MAX_SUBSTRINGS][SNAKY_BUF_SIZE] = {0};
-	int num_substrings = 0;
+	size_t num_substrings = 0;
 
 	char substring[SNAKY_BUF_SIZE] = {0};
-	int i = 0;
+	size_t substring_iter = 0;
 	bool at_least_one_subfield_found = false;
 	for(const char *p = attrib_name; *p; ++p)
 	{
-		if(i + 1 >= sizeof(substring))
+		if(substring_iter + 1 >= sizeof(substring))
 			break;
 
 		// if a space is found, stop parsing substrings (substrings must be chained together with no whitespace)
@@ -811,13 +1170,13 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 			}
 
 			// end the current substring
-			substring[i] = '\0';
+			substring[substring_iter] = '\0';
 
 			// otherwise, add the new substring to the array
 			strcpy(substrings[num_substrings++], substring);
 
 			// reset data for next substring
-			i = 0;
+			substring_iter = 0;
 
 			// signal that at least one period was found
 			at_least_one_subfield_found = true;
@@ -826,7 +1185,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		}
 
 		// if not on a '.' yet, add the current char to the current substring array
-		substring[i++] = *p;
+		substring[substring_iter++] = *p;
 
 		// if the next char is the null terminator and at least one other field was found, end the last substring
 		if(*(p + 1) == '\0' && at_least_one_subfield_found)
@@ -839,22 +1198,28 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 				return 0;
 			}
 
-			substring[i] = '\0';
+			substring[substring_iter] = '\0';
 
 			strcpy(substrings[num_substrings++], substring);
 
-			i = 0;
+			substring_iter = 0;
 
 			continue;
 		}
 	}
 
-	// now iterate over substring array, and parse each substring as an individual target attribute
+	/*
+	   now iterate over substring array, and parse each substring as an individual target attribute
+
+	   also, every time one of the substring attributes is parsed, move the string pointer to that
+	   attribute's position
+	*/
+	const char *pos = str;
 	for(size_t s = 0; s < num_substrings; ++s)
 	{
 		if(sbuffer)
 		{
-			if(!snaky_parse_target_attrib_str(str, substrings[s], sbuffer, out_curr_start_pos, out_next_start_pos, out_data_type))
+			if(!snaky_parse_target_attrib_str(pos, substrings[s], sbuffer, &pos, out_next_start_pos, out_data_type))
 			{
 				vl_log(VL_ERROR, "Failed to parse substring attribute: '%s' in string '%s'\n", substrings[s], str);
 				return 0;
@@ -862,7 +1227,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		}
 		else if(buffer && buffer_size > 0)
 		{
-			if(!snaky_parse_target_attrib_buf(str, substrings[s], buffer, buffer_size, out_curr_start_pos, out_next_start_pos, out_data_type))
+			if(!snaky_parse_target_attrib_buf(pos, substrings[s], buffer, buffer_size, &pos, out_next_start_pos, out_data_type))
 			{
 				vl_log(VL_ERROR, "Failed to parse substring attribute: '%s' in string '%s'\n", substrings[s], str);
 				return 0;
@@ -877,38 +1242,72 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 	   which means the function has succeeded, return 1
 	*/
 	if(num_substrings > 0)
+	{
+		// see if 'out_curr_start_pos' needs to use 'pos'
+		if(out_curr_start_pos)
+			*out_curr_start_pos = pos;
 		return 1;
+	}
 
 	// see if user searching for a value within an array (requires '[N]' in 'attrib_name')
-	char index_value[SNAKY_BUF_SIZE] = {0};
+	char index_values[SNAKY_MAX_ARR_DIMENSIONS][SNAKY_BUF_SIZE] = {0};
+	size_t num_indices = 0;
+
+	char index[SNAKY_BUF_SIZE] = {0};
+	size_t index_iter = 0;
 	for(const char *p = attrib_name; *p; ++p)
 	{
 		if(*p == ARR_OPENING)
 		{
 			p++;
 
-			size_t i = 0;
 			while(*p && *p != ARR_CLOSING)
 			{
-				if(i + 1 >= sizeof(index_value))
+				if(index_iter + 1 >= sizeof(index))
 					break;
-				index_value[i++] = *p++;
+				index[index_iter++] = *p++;
 			}
-			index_value[i] = '\0';
-			break;
+
+			index[index_iter] = '\0';
+
+			strcpy(index_values[num_indices++], index);
+
+			index_iter = 0;
 		}
 	}
 
-	// if index_value length exceeds 0, user provided an index
-	size_t index_value_len = strlen(index_value);
-	if(index_value_len > 0)
+	// if num_indices exceeds 0, user provided at least one index
+	if(num_indices > 0)
 	{
-		// now parse the index value
+		// because the attrib name contains a '[N]...' part, the actual length of the array's name in the string does not include these characters
+		size_t actual_array_name_len = 0;
+		for(const char *a = attrib_name; *a; ++a)
+		{
+			if(*a == ARR_OPENING)
+				break;
+			actual_array_name_len++;
+		}
+
+		// now parse the index values:
+		const char *index_values_ptr[num_indices];
+		for(size_t i = 0; i < num_indices; ++i)
+			index_values_ptr[i] = index_values[i];
+
+		/*
+		   dimensions array represents the size of the array ([[0, 1, 2], [3, 4, 5]] would be represented as { 2, 3 })
+
+		   this means the dimensions array is always going to store 2 numbers
+		*/
+		size_t dimensions[SNAKY_MAX_ARR_DIMENSIONS] = {0};
+		size_t num_dimensions = 0;
+		if(!parse_dimensions(str_origin, attrib_name, actual_array_name_len, dimensions, &num_dimensions))
+			return 0;
+
 		int s = 0;
-		int index = snaky_parse_int(str, index_value, &s);
+		int index = parse_index(str_origin, index_values_ptr, num_indices, dimensions, num_dimensions, &s);
 		if(s == 0)
 		{
-			vl_log(VL_ERROR, "Failed to parse target index: '%s'!\n", attrib_name);
+			vl_log(VL_ERROR, "Invalid index or failed parsing: '%s'!\n", attrib_name);
 			return 0;
 		}
 
@@ -919,55 +1318,56 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 			return 0;
 		}
 
-		// because the attrib name contains a '[N]' part, the actual length of the array's name in the string does not include these characters
-		size_t actual_array_name_len = 0;
-		for(const char *a = attrib_name; *a; ++a)
-		{
-			if(*a == ARR_OPENING)
-				break;
-			actual_array_name_len++;
-		}
-
-		// now find the array in the attribute string, go to the specific index, and parse the value there
+		// the final index represents the final linear index so go to the comma in the array matching that number
 		for(const char *p = str; *p; ++p)
 		{
 			if(strncmp(p, attrib_name, actual_array_name_len) == 0)
 			{
-				while(*p && *p != ARR_OPENING)
+				while(*p && *p != ARR_OPENING && strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) != 0)
 					p++;
 				if(!*p)
 				{
 					vl_log(VL_ERROR, "Unexpected termination of string: '%s'!\n", str);
 					return 0;
 				}
+				// see if a nested attribute string was found, meaning the array element cannot be parsed directly
+				if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0)
+				{
+					vl_log(VL_ERROR, "Array elements cannot be parsed yet, a nested attribute string was encountered: '%s'!\n", p);
+					return 0;
+				}
 
 				const char *array_start = p;
 
-				// when the array is found, go to the specific index in the array
-				size_t curr_index = 0;
-				while(*p && *p != ARR_CLOSING)
+				const char *array_end = find_end_of_array(array_start);
+				if(!array_end)
 				{
-					// see if a ',' is found
-					if(*p == ARR_ELEM_DELIM)
-						curr_index++;
+					vl_log(VL_ERROR, "No end of array found: '%s'!\n", array_start);
+					return 0;
+				}
 
-					// go to next valid character
-					p++;
-					skip_whitespace(&p, NULL);
-
-					// when the current index matches the target index:
-					if(curr_index == index)
+				// convert index strings to ints in an array
+				int real_indices[num_indices];
+				for(size_t i = 0; i < num_indices; ++i)
+				{
+					int s = 0;
+					real_indices[i] = snaky_parse_int(str_origin, index_values[i], &s);
+					if(s == 0 || real_indices[i] < 0)
 					{
-						vl_log(VL_DEBUG, "curr_index = %zu, index = %d\n", curr_index, index);
-						return parse_array_element(str_origin, array_start, p, sbuffer, buffer, buffer_size, out_curr_start_pos, out_next_start_pos);
+						vl_log(VL_ERROR, "Failed to parse index: '%s'!\n", index_values[i]);
+						return 0;
 					}
 				}
 
-				if(curr_index < index)
+				// when the array is found, go to the specific index in the array
+				const char *elem_start = NULL;
+				if(!find_array_element(array_start, array_end, real_indices, num_indices, 0, &elem_start))
 				{
-					vl_log(VL_ERROR, "Index %zu is out of bounds for array '%s'!\n", index, array_start);
+					vl_log(VL_ERROR, "Failed to locate array element: '%s'!\n", attrib_name);
 					return 0;
 				}
+
+				return parse_array_element(str_origin, array_start, array_end, elem_start, sbuffer, buffer, buffer_size, out_curr_start_pos, out_next_start_pos);
 			}
 		}
 
