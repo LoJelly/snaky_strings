@@ -237,6 +237,45 @@ typedef struct snaky_attrib_list
 } snaky_attrib_list;
 
 /**
+  Contains information about an attribute
+  within an attribute string.
+*/
+typedef struct snaky_attrib_info
+{
+	/**
+	  The total length of the attribute
+	  in the original string.
+
+	  This includes any whitespace,
+	  the length of the name and value,
+	  and any other required characters
+	  like the ';' or '=.'
+	*/
+	size_t total_len;
+
+	/**
+	  The position of this attribute's
+	  name within the original string.
+	*/
+	const char *name_start_pos;
+	/**
+	  The position of this attribute's
+	  value within its original string.
+	*/
+	const char *value_start_pos;
+	/**
+	  The position of the next attribute
+	  in this attribute's original string.
+	*/
+	const char *next_start_pos;
+
+	/**
+	  The attribute's data type.
+	*/
+	snaky_data_type data_type;
+} snaky_attrib_info;
+
+/**
   Determines how data should be written to a file.
 */
 typedef enum snaky_fwrite_mode
@@ -402,21 +441,14 @@ SNAKY_API int snaky_realloc_str(snaky_string *str, size_t bytes);
   If this is NULL, then the function will only return
   whether or not the attribute was found.
   @param buffer_size The size of 'buffer' in bytes.
-  @param out_curr_start_pos A pointer to a const char*. If a valid pointer
-  is given, it will be equal to the position in the original
-  string where the parsed attribute's value starts. If the attribute is not
-  found, then the pointer will be equal to NULL.
-  @param out_next_start_pos A pointer to a const char*. If a valid pointer
-  is given, it will be equal to the position in the original
-  string where the next attribute starts, unless there is no next attribute
-  found, and then it will be equal to NULL.
-  @param out_data_type A pointer to a snaky_data_type. If a valid pointer
-  is given, it will be equal to the data type of the parsed attribute.
+  @param out_info A pointer to a snaky_attrib_info struct. If
+  a valid pointer is given, the function outputs data into the
+  given snaky_attrib_info struct.
 
   @return 1 if the attribute was successfully parsed/found, 0 if the
   function fails in any way.
 */
-SNAKY_API int snaky_parse_target_attrib_buf(const char *str, const char *attrib_name, char *buffer, size_t buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_target_attrib_buf(const char *str, const char *attrib_name, char *buffer, size_t buffer_size, snaky_attrib_info *out_info);
 /**
   Same as snaky_parse_target_attrib(...) but uses a snaky_string instead
   of a char buffer.
@@ -425,7 +457,7 @@ SNAKY_API int snaky_parse_target_attrib_buf(const char *str, const char *attrib_
 
   @see snaky_parse_target_attrib_buf(const char*, char*, size_t, const char*, const char**, const char**, snaky_data_type*)
 */
-SNAKY_API int snaky_parse_target_attrib_str(const char *str, const char *attrib_name, snaky_string *buffer, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_target_attrib_str(const char *str, const char *attrib_name, snaky_string *buffer, snaky_attrib_info *out_info);
 /**
   Searches the given string for the very next attribute and tries to parse its value.
 
@@ -441,16 +473,16 @@ SNAKY_API int snaky_parse_target_attrib_str(const char *str, const char *attrib_
   to determine the type of the value. Because of this, it will never assume the SNAKY_DOUBLE
   or SNAKY_CHAR types. It can only ever assume SNAKY_BOOL, SNAKY_INT, or SNAKY_FLOAT.
 
-  @see snaky_parse_target_attrib_buf(const char*, char*, size_t, const char*, const char**, const char**, snaky_data_type*)
+  @see snaky_parse_target_attrib_buf(const char*, const char*, char*, size_t, snaky_attrib_info*)
 */
-SNAKY_API int snaky_parse_attrib_buf(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_attrib_buf(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, snaky_attrib_info *out_info);
 /**
   Same as snaky_parse_attrib(...) but uses snaky_strings for the name and value
   char buffers.
 
-  @see snaky_parse_attrib_buf(const char*, char*, size_t, char*, size_t, const char**, const char**, snaky_data_type*)
+  @see snaky_parse_attrib_buf(const char*, char*, size_t, char*, size_t, snaky_attrib_info*)
 */
-SNAKY_API int snaky_parse_attrib_str(const char *str, snaky_string *name_str, snaky_string *value_str, const char **out_curr_start_pos, const char **out_next_start_pos, snaky_data_type *out_data_type);
+SNAKY_API int snaky_parse_attrib_str(const char *str, snaky_string *name_str, snaky_string *value_str, snaky_attrib_info *out_info);
 
 /**
   Searches the given string for a specific attribute and removes it entirely.
@@ -466,6 +498,31 @@ SNAKY_API int snaky_remove_attrib_buf(char *str, const char *attrib_name);
   @see snaky_remove_attrib(char*, const char*)
 */
 SNAKY_API int snaky_remove_attrib_str(snaky_string *str, const char *attrib_name);
+/**
+  Removes multiple attributes from an attribute string.
+
+  When removing multiple attributes, the 'attribs' string
+  must be its own attribute string.
+
+  For example, if the target attribute string is:
+
+  "{<x=100,y=200,z=300>}"
+
+  To remove both the 'x' and 'z' attributes, you would use this
+  function like so:
+
+  'snaky_remove_attribs_buf(str, sizeof(str), "{<x;z;>}");'
+
+  @note The attributes in the 'attribs' string are not defined.
+  That is because they are only being removed, not set.
+*/
+SNAKY_API int snaky_remove_attribs_buf(char *str, const char *attribs);
+/**
+  Same as snaky_remove_attribs_buf(...) but uses a snaky_string instead.
+
+  @see snaky_remove_attribs_buf(char*, const char*)
+*/
+SNAKY_API int snaky_remove_attribs_str(snaky_string *str, const char *attribs);
 
 /**
   Modifies an attribute value directly in a string.
@@ -482,7 +539,7 @@ SNAKY_API int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *at
   If the attribute is not found, it is automatically
   appended to the string, if possible.
 
-  @see snaky_set_attrib(char*, size_t, const char*, const char*)
+  @see snaky_set_attrib_buf(char*, size_t, const char*, const char*)
 */
 SNAKY_API int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char *new_attrib_value);
 /**
@@ -500,7 +557,7 @@ SNAKY_API int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, c
   To set both the 'x' and 'y' attributes at the same time, the function
   would be called like this:
 
-  'snaky_set_attribs(str, sizeof(str), "<x=300,y=150>");'
+  'snaky_set_attribs_buf(str, sizeof(str), "<x=300,y=150>");'
 
   @return 1 on success, 0 on failure.
 */
@@ -510,7 +567,7 @@ SNAKY_API int snaky_set_attribs_buf(char *str, size_t buffer_size, const char *a
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_set_attribs(char*, size_t, const char*)
+  @see snaky_set_attribs_buf(char*, size_t, const char*)
 */
 SNAKY_API int snaky_set_attribs_str(snaky_string *str, const char *attribs);
 
@@ -712,11 +769,25 @@ SNAKY_API void snaky_parse_value(const char *origin, const char *str, snaky_data
   Parses a generic value just like snaky_parse_value(...) but obtains
   the value from an attribute from an attribute string.
 
-  @note The SNAKY_AUTO data type works in this function.
+  @important The 'out_info' and 'out_success' pointers cannot be NULL!
 
   @see snaky_parse_value(const char*, snaky_data_type, void*, int*)
 */
-SNAKY_API void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, const char **out_curr_start_pos, const char **out_next_start_pos, int *out_success);
+SNAKY_API void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_attrib_info *out_info, int *out_success);
+/**
+  Same as snaky_parse_target_attrib_value(...) but plabuffer
+  the parsed attribute value into a buffer.
+
+  @see snaky_parse_target_attrib_value(const char*, const char*, snaky_data_type, void*, snaky_attrib_info*, int*)
+*/
+SNAKY_API void snaky_parse_target_attrib_value_buf(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, char *buffer, size_t buffer_size, snaky_attrib_info *out_info, int *out_success);
+/**
+  Same as snaky_parse_target_attrib_value_buf(...) but uses a
+  snaky_string instead of a normal buffer.
+
+  @see snaky_parse_target_attrib_value_buf(const char*, const char*, snaky_data_type, void*, char*, size_t, snaky_attrib_info*, int*)
+*/
+SNAKY_API void snaky_parse_target_attrib_value_str(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_string *buffer, snaky_attrib_info *out_info, int *out_success);
 /**
   Parses a data type into a string.
 

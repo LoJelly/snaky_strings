@@ -5,23 +5,23 @@
 An example of a snaky_string looks like this:
 
 ```
-<x = 20, y = 50>
-<z = y - x>
+{< x = 20; y = 50 >}
+{< z = y - x >}
 
 /[ This is a Label! ]/
-<key = value>
+{< key = value >}
 
 /* functions like cos and rads can be used! */
-<degs = 60, angle = cos(rads(degs))>
+{< degs = 60; angle = cos(rads(degs)) >}
 
 /* arrays can be created like so: */
-<arr = [2, 4, 6]>
+{< arr = [2, 4, 6] >}
 
-/* objects can be created like so: */
-<obj = {< x-pos = 30, y-pos = 45, color = white >}>
+/* attribute strings can be nested to create object-like structures */
+{< obj = {< x_pos = 30; y_pos = 45; color = white >} >}
 
 /* those values above can also be referenced like so: */
-<value1 = arr[1], value2 = obj.x-pos>
+{< value1 = arr[1]; value2 = obj.x_pos >}
 ```
 
 ## Features
