@@ -31,8 +31,8 @@ var snaky__strings_8h =
       [ "SNAKY_ATTRIB_STRING", "da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3ba33ff7cbd5c09269c63cf4f4694aa3f5a", null ]
     ] ],
     [ "snaky_fwrite_mode", "da/dd1/snaky__strings_8h.html#a8117c407ffac2f119d28e31781ccf823", [
-      [ "SNAKY_FWRITE_BINARY", "da/dd1/snaky__strings_8h.html#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3", null ],
       [ "SNAKY_FWRITE_TEXT", "da/dd1/snaky__strings_8h.html#a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb", null ],
+      [ "SNAKY_FWRITE_BINARY", "da/dd1/snaky__strings_8h.html#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3", null ],
       [ "SNAKY_FWRITE_ENCRYPT", "da/dd1/snaky__strings_8h.html#a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af", null ]
     ] ],
     [ "snaky_count_attribs", "da/dd1/snaky__strings_8h.html#ad4a02ab5f651db726efdb711dc73bcc4", null ],
@@ -82,7 +82,9 @@ var snaky__strings_8h =
     [ "snaky_set_attribs_str", "da/dd1/snaky__strings_8h.html#a385032483cc4f757e3dcd3014c9b6ad4", null ],
     [ "snaky_set_encryption_key", "da/dd1/snaky__strings_8h.html#a5f28896f93bb8b0f06f77f27dbb843d2", null ],
     [ "snaky_shutdown", "da/dd1/snaky__strings_8h.html#a0dafdec72984343d18d189e02e6e1044", null ],
+    [ "snaky_strcat", "da/dd1/snaky__strings_8h.html#aad4a43cbcb3ccbf55462fb56094b3f0a", null ],
     [ "snaky_strcpy", "da/dd1/snaky__strings_8h.html#a6d4c83c8b3b0064aead0e213897f9780", null ],
+    [ "snaky_strequals", "da/dd1/snaky__strings_8h.html#ac413cb6f58f997537271b5ee64fa2a2c", null ],
     [ "snaky_write_file_buf", "da/dd1/snaky__strings_8h.html#a051f2b6e892682728c8c20e1237a8877", null ],
     [ "snaky_write_file_map", "da/dd1/snaky__strings_8h.html#a9583bdd065b61049844216394735dd0a", null ]
 ];

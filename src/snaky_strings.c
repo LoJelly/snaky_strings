@@ -313,6 +313,31 @@ int snaky_strcpy(snaky_string *dest, const char *src)
 
 	return 1;
 }
+int snaky_strcat(snaky_string *str, const char *s)
+{
+	if(!str || !s)
+		return 0;
+
+	size_t s_len = strlen(s);
+
+	if(str->len + s_len + 1 >= str->size)
+	{
+		if(!snaky_realloc_str(str, str->size + s_len))
+			return 0;
+	}
+
+	strcat(str->data, s);
+	str->len = strlen(str->data);
+
+	return 1;
+}
+int snaky_strequals(const snaky_string *str1, const snaky_string *str2)
+{
+	if(!str1 || !str2)
+		return 0;
+
+	return strcmp(str1->data, str2->data) == 0;
+}
 int snaky_realloc_str(snaky_string *str, size_t bytes)
 {
 	if(!str)
@@ -3189,7 +3214,22 @@ int snaky_read_file_buf(const char *file_path, char *buffer, size_t buffer_size,
 		return 0;
 	}
 
-	if(mode == SNAKY_FWRITE_BINARY)
+	if(mode == SNAKY_FWRITE_TEXT)
+	{
+		char read[SNAKY_MAX_LINE_LEN];
+		size_t total_size = 0;
+		while(fgets(read, sizeof(read), f))
+		{
+			total_size += strlen(read);
+
+			if(total_size + 1 >= buffer_size)
+				break;
+
+			// append contents to user's buffer
+			strcat(buffer, read);
+		}
+	}
+	else if(mode == SNAKY_FWRITE_BINARY)
 	{
 		snaky_attrib_map map = {0};
 		dynmaps_init(&map);
@@ -3217,27 +3257,6 @@ int snaky_read_file_buf(const char *file_path, char *buffer, size_t buffer_size,
 		{
 			dynmaps_free_strkeyval(&map);
 			goto snaky_read_file_err;
-		}
-	}
-	else if(mode == SNAKY_FWRITE_TEXT)
-	{
-		snaky_string read = {0};
-		if(!snaky_prepare_str(&read, 128))
-			return 0;
-		size_t total_size = 0;
-		// TODO make realloc_str happen as long as fgets fails:
-		while(fgets(read.data, read.size, f))
-		{
-			total_size += strlen(read.data);
-
-			if(total_size + 1 > buffer_size)
-			{
-				if(!snaky_realloc_str(&read, read.size + STR_CAPACITY_INCREASE))
-					return 0;
-			}
-
-			// append contents to user's buffer
-			strcat(buffer, read.data);
 		}
 	}
 	else if(mode == SNAKY_FWRITE_ENCRYPT)
@@ -3296,7 +3315,23 @@ int snaky_read_file_str(const char *file_path, snaky_string *str, snaky_fwrite_m
 		return 0;
 	}
 
-	if(mode == SNAKY_FWRITE_BINARY)
+	if(mode == SNAKY_FWRITE_TEXT)
+	{
+		char read[SNAKY_MAX_LINE_LEN];
+		size_t total_size = 0;
+		while(fgets(read, sizeof(read), f))
+		{
+			total_size += strlen(read);
+
+			// use strlen(read) * 2 to decrease number of reallocations
+			if(total_size + 1 >= str->size && !snaky_realloc_str(str, str->size + (strlen(read) * 2)))
+				return 0;
+
+			// append contents to string
+			snaky_strcat(str, read);
+		}
+	}
+	else if(mode == SNAKY_FWRITE_BINARY)
 	{
 		snaky_attrib_map map = {0};
 		dynmaps_init(&map);
@@ -3322,24 +3357,6 @@ int snaky_read_file_str(const char *file_path, snaky_string *str, snaky_fwrite_m
 		}
 		else
 			goto snaky_read_file_err;
-	}
-	else if(mode == SNAKY_FWRITE_TEXT)
-	{
-		snaky_string read = {0};
-		if(!snaky_prepare_str(&read, 128))
-			return 0;
-		// TODO make string grow as file length grows:
-		size_t total_size = 0;
-		while(fgets(read.data, read.size, f))
-		{
-			total_size += strlen(read.data);
-
-			if(total_size + 1 >= str->size && !snaky_realloc_str(str, str->size + strlen(read.data)))
-				return 0;
-
-			// append contents to string
-			strcat(str->data, read.data);
-		}
 	}
 	else if(mode == SNAKY_FWRITE_ENCRYPT)
 	{
@@ -3426,7 +3443,34 @@ int snaky_read_file_map(const char *file_path, snaky_attrib_map *map, snaky_fwri
 	}
 
 	// determine how the map should be read:
-	if(mode == SNAKY_FWRITE_BINARY)
+	if(mode == SNAKY_FWRITE_TEXT)
+	{
+		/*
+		   because text mode writes plain text, binary map like
+		   the map's size or the lengths of keys and values
+		   are not present in the file. Therefore, the entirety
+		   of the file needs to be read into a string buffer
+		   and the arg map needs to be collected from that instead
+		*/
+		snaky_string file_contents = {0};
+		if(!snaky_prepare_str(&file_contents, 1024))
+			goto snaky_read_file_err;
+		// read file contents into a single snaky_string
+		if(!snaky_read_file_str(file_path, &file_contents, mode))
+		{
+			snaky_free_str(&file_contents);
+			goto snaky_read_file_err;
+		}
+
+		// collect attrib map from that string
+		int success = snaky_generate_attrib_map(file_contents.data, map);
+
+		// free allocated string buffer
+		snaky_free_str(&file_contents);
+
+		goto snaky_read_file_success;
+	}
+	else if(mode == SNAKY_FWRITE_BINARY)
 	{
 		// first read the number of entries in the file:
 		size_t size = 0;
@@ -3466,33 +3510,6 @@ int snaky_read_file_map(const char *file_path, snaky_attrib_map *map, snaky_fwri
 				return 0;
 			}
 		}
-	}
-	else if(mode == SNAKY_FWRITE_TEXT)
-	{
-		/*
-		   because text mode writes plain text, binary map like
-		   the map's size or the lengths of keys and values
-		   are not present in the file. Therefore, the entirety
-		   of the file needs to be read into a string buffer
-		   and the arg map needs to be collected from that instead
-		*/
-		snaky_string file_contents = {0};
-		if(!snaky_prepare_str(&file_contents, 1024))
-			goto snaky_read_file_err;
-		// read file contents into a single snaky_string
-		if(!snaky_read_file_str(file_path, &file_contents, mode))
-		{
-			snaky_free_str(&file_contents);
-			goto snaky_read_file_err;
-		}
-
-		// collect attrib map from that string
-		int success = snaky_generate_attrib_map(file_contents.data, map);
-
-		// free allocated string buffer
-		snaky_free_str(&file_contents);
-
-		goto snaky_read_file_success;
 	}
 	else if(mode == SNAKY_FWRITE_ENCRYPT)
 	{
@@ -3567,7 +3584,27 @@ int snaky_write_file_map(const char *file_path, snaky_attrib_map *map, snaky_fwr
 	// write each part of the map to the file:
 
 	// determine how the map should be written:
-	if(mode == SNAKY_FWRITE_BINARY)
+	if(mode == SNAKY_FWRITE_TEXT)
+	{
+		// write each entry in the map:
+		for(size_t i = 0; i < map->size; ++i)
+		{
+			size_t key_len = strlen(map->keys[i]);
+			size_t val_len = strlen(map->values[i]);
+
+			if(fwrite("<", sizeof(char), 1, f) != 1)
+				goto snaky_write_file_err;
+			if(fwrite(map->keys[i], sizeof(char), key_len, f) != key_len)
+				goto snaky_write_file_err;
+			if(fwrite("=", sizeof(char), 1, f) != 1)
+				goto snaky_write_file_err;
+			if(fwrite(map->values[i], sizeof(char), val_len, f) != val_len)
+				goto snaky_write_file_err;
+			if(fwrite(">\n", sizeof(char), 2, f) != 2)
+				goto snaky_write_file_err;
+		}
+	}
+	else if(mode == SNAKY_FWRITE_BINARY)
 	{
 		// first, the number of entries in the map:
 		if(fwrite(&map->size, sizeof(map->size), 1, f) != 1)
@@ -3593,26 +3630,6 @@ int snaky_write_file_map(const char *file_path, snaky_attrib_map *map, snaky_fwr
 
 			// write value contents
 			if(fwrite(map->values[i], sizeof(char), val_len, f) != val_len)
-				goto snaky_write_file_err;
-		}
-	}
-	else if(mode == SNAKY_FWRITE_TEXT)
-	{
-		// write each entry in the map:
-		for(size_t i = 0; i < map->size; ++i)
-		{
-			size_t key_len = strlen(map->keys[i]);
-			size_t val_len = strlen(map->values[i]);
-
-			if(fwrite("<", sizeof(char), 1, f) != 1)
-				goto snaky_write_file_err;
-			if(fwrite(map->keys[i], sizeof(char), key_len, f) != key_len)
-				goto snaky_write_file_err;
-			if(fwrite("=", sizeof(char), 1, f) != 1)
-				goto snaky_write_file_err;
-			if(fwrite(map->values[i], sizeof(char), val_len, f) != val_len)
-				goto snaky_write_file_err;
-			if(fwrite(">\n", sizeof(char), 2, f) != 2)
 				goto snaky_write_file_err;
 		}
 	}
@@ -3688,7 +3705,22 @@ int snaky_write_file_buf(const char *file_path, const char *buffer, snaky_fwrite
 	if(!file_path || !buffer || buffer_len == 0)
 		return 0;
 
-	if(mode == SNAKY_FWRITE_BINARY)
+	if(mode == SNAKY_FWRITE_TEXT)
+	{
+		FILE *f = fopen(file_path, "wb");
+		if(!f)
+		{
+			vl_log(VL_ERROR, "Failed to open file at path: '%s'!\n", file_path);
+			return 0;
+		}
+
+		// just write the buffer normally
+		if(fwrite(buffer, sizeof(char), buffer_len, f) != buffer_len)
+			goto snaky_write_file_err;
+		else
+			fclose(f);
+	}
+	else if(mode == SNAKY_FWRITE_BINARY)
 	{
 		// convert buffer to attrib_data and write that instead
 		snaky_attrib_map map = {0};
@@ -3706,21 +3738,6 @@ int snaky_write_file_buf(const char *file_path, const char *buffer, snaky_fwrite
 		}
 		else
 			goto snaky_write_file_err;
-	}
-	else if(mode == SNAKY_FWRITE_TEXT)
-	{
-		FILE *f = fopen(file_path, "wb");
-		if(!f)
-		{
-			vl_log(VL_ERROR, "Failed to open file at path: '%s'!\n", file_path);
-			return 0;
-		}
-
-		// just write the buffer normally
-		if(fwrite(buffer, sizeof(char), buffer_len, f) != buffer_len)
-			goto snaky_write_file_err;
-		else
-			fclose(f);
 	}
 	else if(mode == SNAKY_FWRITE_ENCRYPT)
 	{

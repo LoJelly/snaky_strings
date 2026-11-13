@@ -72,10 +72,12 @@ var searchData=
   ['snaky_5fset_5fattribs_5fstr_69',['snaky_set_attribs_str',['../da/dd1/snaky__strings_8h.html#a385032483cc4f757e3dcd3014c9b6ad4',1,'snaky_strings.h']]],
   ['snaky_5fset_5fencryption_5fkey_70',['snaky_set_encryption_key',['../da/dd1/snaky__strings_8h.html#a5f28896f93bb8b0f06f77f27dbb843d2',1,'snaky_strings.h']]],
   ['snaky_5fshutdown_71',['snaky_shutdown',['../da/dd1/snaky__strings_8h.html#a0dafdec72984343d18d189e02e6e1044',1,'snaky_strings.h']]],
-  ['snaky_5fstrcpy_72',['snaky_strcpy',['../da/dd1/snaky__strings_8h.html#a6d4c83c8b3b0064aead0e213897f9780',1,'snaky_strings.h']]],
-  ['snaky_5fstring_73',['SNAKY_STRING',['../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3bae285018080e00a6675669d012eac782b',1,'snaky_strings.h']]],
-  ['snaky_5fstring_74',['snaky_string',['../da/d8e/structsnaky__string.html',1,'snaky_string'],['../da/dd1/snaky__strings_8h.html#a0a845ed78a212be7645296168076dc10',1,'snaky_string:&#160;snaky_strings.h']]],
-  ['snaky_5fstrings_2eh_75',['snaky_strings.h',['../da/dd1/snaky__strings_8h.html',1,'']]],
-  ['snaky_5fwrite_5ffile_5fbuf_76',['snaky_write_file_buf',['../da/dd1/snaky__strings_8h.html#a051f2b6e892682728c8c20e1237a8877',1,'snaky_strings.h']]],
-  ['snaky_5fwrite_5ffile_5fmap_77',['snaky_write_file_map',['../da/dd1/snaky__strings_8h.html#a9583bdd065b61049844216394735dd0a',1,'snaky_strings.h']]]
+  ['snaky_5fstrcat_72',['snaky_strcat',['../da/dd1/snaky__strings_8h.html#aad4a43cbcb3ccbf55462fb56094b3f0a',1,'snaky_strings.h']]],
+  ['snaky_5fstrcpy_73',['snaky_strcpy',['../da/dd1/snaky__strings_8h.html#a6d4c83c8b3b0064aead0e213897f9780',1,'snaky_strings.h']]],
+  ['snaky_5fstrequals_74',['snaky_strequals',['../da/dd1/snaky__strings_8h.html#ac413cb6f58f997537271b5ee64fa2a2c',1,'snaky_strings.h']]],
+  ['snaky_5fstring_75',['SNAKY_STRING',['../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3bae285018080e00a6675669d012eac782b',1,'snaky_strings.h']]],
+  ['snaky_5fstring_76',['snaky_string',['../da/d8e/structsnaky__string.html',1,'snaky_string'],['../da/dd1/snaky__strings_8h.html#a0a845ed78a212be7645296168076dc10',1,'snaky_string:&#160;snaky_strings.h']]],
+  ['snaky_5fstrings_2eh_77',['snaky_strings.h',['../da/dd1/snaky__strings_8h.html',1,'']]],
+  ['snaky_5fwrite_5ffile_5fbuf_78',['snaky_write_file_buf',['../da/dd1/snaky__strings_8h.html#a051f2b6e892682728c8c20e1237a8877',1,'snaky_strings.h']]],
+  ['snaky_5fwrite_5ffile_5fmap_79',['snaky_write_file_map',['../da/dd1/snaky__strings_8h.html#a9583bdd065b61049844216394735dd0a',1,'snaky_strings.h']]]
 ];

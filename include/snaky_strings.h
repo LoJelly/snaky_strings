@@ -281,13 +281,6 @@ typedef struct snaky_attrib_info
 typedef enum snaky_fwrite_mode
 {
 	/**
-	  The default write mode.
-
-	  This results in all data being
-	  written in binary format.
-	*/
-	SNAKY_FWRITE_BINARY,
-	/**
 	  Results in plain text being
 	  written to the file.
 
@@ -308,6 +301,13 @@ typedef enum snaky_fwrite_mode
 	  use snaky_write_file_str(...) instead.
 	*/
 	SNAKY_FWRITE_TEXT,
+	/**
+	  The default write mode.
+
+	  This results in all data being
+	  written in binary format.
+	*/
+	SNAKY_FWRITE_BINARY,
 	/**
 	  Results in non-string values
 	  being written in binary format,
@@ -342,7 +342,7 @@ SNAKY_API int snaky_shutdown(void);
   using a string literal or char buffer.
 
   @important This function duplicates
-  the 'data' array given and uses
+  the 'data' string given and uses
   that for the snaky_string's 'data'
   field. Because of this, you must
   free the string later with
@@ -383,6 +383,19 @@ SNAKY_API void snaky_free_str(snaky_string *str);
   @return 1 on success, 0 on failure.
 */
 SNAKY_API int snaky_strcpy(snaky_string *dest, const char *src);
+/**
+  Appends a string to a snaky_string.
+
+  @return 1 on success, 0 on failure.
+*/
+SNAKY_API int snaky_strcat(snaky_string *str, const char *s);
+/**
+  Determines if two strings are equal.
+
+  @return 1 if the strings are equal, and 0
+  if they are not.
+*/
+SNAKY_API int snaky_strequals(const snaky_string *str1, const snaky_string *str2);
 /**
   Reallocates memory for a snaky_string based on a new size in bytes.
 
