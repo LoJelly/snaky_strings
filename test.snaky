@@ -1,5 +1,50 @@
+/* the entire program is in a single attribute string! */
+
 {<
-	test1 = 24;
-	inventory = [0, 1, 2];
-	test2 = 32;
+	/* first, init the window! */
+	window = {<
+		title = Game Demo;
+		width = 1280;
+		height = 720;
+		resizable = TRUE;
+		decorated = TRUE;
+		visible = TRUE;
+		icon = 'res/icon.png';
+		bg_color = WHITE;
+	>};
+
+	/* register scenes in an array! */
+	scenes = [TITLE, PAUSE, OPTIONS, MAIN];
+
+	/* create scenes here! */
+	TITLE = {<
+		bg_color = BLUE;
+
+		play_btn = {<
+			/* pos, x, y, color, outline, etc. */
+		>};
+	>};
+
+	PAUSE = {<
+		/* ... */
+	>};
+
+	OPTIONS = {<
+		/* ... */
+	>};
+
+	MAIN = {<
+		/* ... */
+	>};
+
+	/*
+	   here start_scene is set to TITLE,
+	   which means when start_scene
+	   is parsed, it will be equal to
+	   the exact contents of the 'TITLE'
+	   attribute string
+	*/
+	start_scene = TITLE;
+
+	/* ... */
 >};

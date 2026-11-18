@@ -719,6 +719,12 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 	// if next start pos queried, return it
 	return_next_start_pos(value_start, out_info);
 
+	// as long as the value returned is another attribute, re-parse it
+	if(sbuffer)
+		while(snaky_parse_target_attrib_str(str_origin, sbuffer->data, sbuffer, out_info));
+	else if(buffer && buffer_size > 0)
+		while(snaky_parse_target_attrib_buf(str_origin, buffer, buffer, buffer_size, out_info));
+
 	return 1;
 }
 static int find_array_element(const char *array_start, const char *array_end, const int *indices, size_t num_indices, size_t depth, const char **out_elem_start)
@@ -926,7 +932,7 @@ static int parse_array_element(const char *str_origin, const char *array_start, 
 }
 
 // if using a snaky_string, 'sbuffer' won't be NULL, but if using a normal stack-allocated buffer, it will be NULL
-static int parse_target_attrib(const char *str_origin, const char *attribs_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *attrib_name, size_t attrib_len, snaky_attrib_info *out_info)
+static int parse_target_attrib(const char *str_origin, const char *attribs_start, const char *attrib_name, size_t attrib_len, snaky_string *sbuffer, char *buffer, size_t buffer_size, snaky_attrib_info *out_info)
 {
 	skip_whitespace(&attribs_start, NULL);
 
@@ -1192,6 +1198,129 @@ static size_t parse_index(const char *str_origin, const char **index_values, siz
 	*out_success = 1;
 	return final_index;
 }
+static int parse_array(const char *const str_origin, const char *const array, snaky_string *sbuffer, char *buffer, size_t buffer_size, snaky_attrib_info *out_info)
+{
+	char index_values[SNAKY_MAX_ARR_DIMENSIONS][SNAKY_BUF_SIZE] = {0};
+	size_t num_indices = 0;
+
+	char index[SNAKY_BUF_SIZE] = {0};
+	size_t index_iter = 0;
+	for(const char *s = array; *s; ++s)
+	{
+		if(*s == ARR_OPENING)
+		{
+			s++;
+
+			while(*s && *s != ARR_CLOSING)
+			{
+				if(index_iter + 1 >= sizeof(index))
+					break;
+				index[index_iter++] = *s++;
+			}
+
+			index[index_iter] = '\0';
+
+			strcpy(index_values[num_indices++], index);
+
+			index_iter = 0;
+		}
+	}
+
+	if(num_indices > 0)
+	{
+		size_t actual_array_len = 0;
+		for(const char *s = array; *s; ++s)
+		{
+			if(*s == ARR_OPENING)
+				break;
+			actual_array_len++;
+		}
+
+		const char *index_values_ptr[num_indices];
+		for(size_t i = 0; i < num_indices; ++i)
+			index_values_ptr[i] = index_values[i];
+
+		size_t dimensions[SNAKY_MAX_ARR_DIMENSIONS] = {0};
+		size_t num_dimensions = 0;
+		if(!parse_dimensions(str_origin, array, actual_array_len, dimensions, &num_dimensions))
+			return 0;
+
+		int s = 0;
+		int index = parse_index(str_origin, index_values_ptr, num_indices, dimensions, num_dimensions, &s);
+		if(s == 0)
+		{
+			vl_log(VL_ERROR, "Invalid index or failed parsing: '%s'!\n", array);
+			return 0;
+		}
+
+		// now find the array in the original string
+		for(const char *a = str_origin; *a; ++a)
+		{
+			if(strncmp(a, array, actual_array_len) == 0)
+			{
+				while(*a && *a != ARR_OPENING && strncmp(a, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) != 0)
+					a++;
+				if(!*a)
+				{
+					vl_log(VL_ERROR, "Unexpected termination of string: '%s'!\n", array);
+					return 0;
+				}
+				if(strncmp(a, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0)
+				{
+					vl_log(VL_ERROR, "Array elements cannot be parsed yet, a nested attribute string was encountered: '%s'!\n", a);
+					return 0;
+				}
+
+				const char *array_start = a;
+
+				const char *array_end = find_end_of_array(array_start);
+				if(!array_end)
+				{
+					vl_log(VL_ERROR, "No end of array found: '%s'!\n", array_start);
+					return 0;
+				}
+
+				int real_indices[num_indices];
+				for(size_t i = 0; i < num_indices; ++i)
+				{
+					int s = 0;
+					real_indices[i] = snaky_parse_int(str_origin, index_values[i], &s);
+					if(s == 0 || real_indices[i] < 0)
+					{
+						vl_log(VL_ERROR, "Failed to parse index: '%s'!\n", index_values[i]);
+						return 0;
+					}
+				}
+
+				const char *elem_start = NULL;
+				if(!find_array_element(array_start, array_end, real_indices, num_indices, 0, &elem_start))
+				{
+					vl_log(VL_ERROR, "Failed to locate array element: '%s'!\n", array);
+					return 0;
+				}
+
+				if(!parse_array_element(str_origin, array_start, array_end, elem_start, sbuffer, buffer, buffer_size, out_info))
+				{
+					vl_log(VL_ERROR, "Failed to parse array '%s' in string: '%s'!\n", array, str_origin);
+					return 0;
+				}
+
+				// as long as the element is another attribute, re-parse it
+				if(sbuffer)
+					while(snaky_parse_target_attrib_str(str_origin, sbuffer->data, sbuffer, out_info));
+				else if(buffer && buffer_size > 0)
+					while(snaky_parse_target_attrib_buf(str_origin, buffer, buffer, buffer_size, out_info));
+
+				return 1;
+			}
+		}
+
+		vl_log(VL_ERROR, "End of string reached! Failed to parse array '%s' in string: '%s'!\n", array, str_origin);
+		return 0;
+	}
+
+	return 0;
+}
 static int prepare_parse_target_attrib(const char *str, const char *attrib_name, snaky_string *sbuffer, char *buffer, size_t buffer_size, snaky_attrib_info *out_info)
 {
 	const char *str_origin = str;
@@ -1275,198 +1404,127 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		}
 	}
 
-	/*
-	   now iterate over substring array, and parse each substring as an individual target attribute
-
-	   also, every time one of the substring attributes is parsed, move the string pointer to that
-	   attribute's position
-	*/
-	snaky_attrib_info pos_info = {0};
-	for(size_t s = 0; s < num_substrings; ++s)
-	{
-		if(sbuffer)
-		{
-			if(!snaky_parse_target_attrib_str(pos_info.value_start_pos, substrings[s], sbuffer, &pos_info))
-			{
-				vl_log(VL_ERROR, "Failed to parse substring attribute: '%s' in string '%s'\n", substrings[s], str);
-				return 0;
-			}
-		}
-		else if(buffer && buffer_size > 0)
-		{
-			if(!snaky_parse_target_attrib_buf(pos_info.value_start_pos, substrings[s], buffer, buffer_size, &pos_info))
-			{
-				vl_log(VL_ERROR, "Failed to parse substring attribute: '%s' in string '%s'\n", substrings[s], str);
-				return 0;
-			}
-		}
-	}
-
-	/*
-	   if num_substrings is > 0 (the for loop above did execute), and the function hasn't returned yet,
-	   then the last nested attribute was parsed successfully
-	   and its value was inserted into the correct buffer (sbuffer or buffer),
-	   which means the function has succeeded, return 1
-	*/
+	// see if any substrings were parsed
+	size_t curr_substring = 0;
 	if(num_substrings > 0)
 	{
-		// see if 'out_curr_start_pos' needs to use 'pos'
-		if(out_info)
-			out_info->value_start_pos = pos_info.value_start_pos;
-		return 1;
-	}
-
-	// see if user searching for a value within an array (requires '[N]' in 'attrib_name')
-	char index_values[SNAKY_MAX_ARR_DIMENSIONS][SNAKY_BUF_SIZE] = {0};
-	size_t num_indices = 0;
-
-	char index[SNAKY_BUF_SIZE] = {0};
-	size_t index_iter = 0;
-	for(const char *p = attrib_name; *p; ++p)
-	{
-		if(*p == ARR_OPENING)
-		{
-			p++;
-
-			while(*p && *p != ARR_CLOSING)
-			{
-				if(index_iter + 1 >= sizeof(index))
-					break;
-				index[index_iter++] = *p++;
-			}
-
-			index[index_iter] = '\0';
-
-			strcpy(index_values[num_indices++], index);
-
-			index_iter = 0;
-		}
-	}
-
-	// if num_indices exceeds 0, user provided at least one index
-	if(num_indices > 0)
-	{
-		// because the attrib name contains a '[N]...' part, the actual length of the array's name in the string does not include these characters
-		size_t actual_array_name_len = 0;
-		for(const char *a = attrib_name; *a; ++a)
-		{
-			if(*a == ARR_OPENING)
-				break;
-			actual_array_name_len++;
-		}
-
-		// now parse the index values:
-		const char *index_values_ptr[num_indices];
-		for(size_t i = 0; i < num_indices; ++i)
-			index_values_ptr[i] = index_values[i];
-
-		/*
-		   dimensions array represents the size of the array ([[0, 1, 2], [3, 4, 5]] would be represented as { 2, 3 })
-
-		   this means the dimensions array is always going to store 2 numbers
-		*/
-		size_t dimensions[SNAKY_MAX_ARR_DIMENSIONS] = {0};
-		size_t num_dimensions = 0;
-		if(!parse_dimensions(str_origin, attrib_name, actual_array_name_len, dimensions, &num_dimensions))
-			return 0;
-
-		int s = 0;
-		int index = parse_index(str_origin, index_values_ptr, num_indices, dimensions, num_dimensions, &s);
-		if(s == 0)
-		{
-			vl_log(VL_ERROR, "Invalid index or failed parsing: '%s'!\n", attrib_name);
-			return 0;
-		}
-
-		// validate index
-		if(index < 0)
-		{
-			vl_log(VL_ERROR, "Cannot have a negative index: '%s'!\n", attrib_name);
-			return 0;
-		}
-
-		// the final index represents the final linear index so go to the comma in the array matching that number
+		// and if so, iterate over the string and find each substring and parse until the final one is found
 		for(const char *p = str; *p; ++p)
 		{
-			if(strncmp(p, attrib_name, actual_array_name_len) == 0)
+			// when the number of substrings match, that means the last substring was parsed successfully
+			if(curr_substring > num_substrings)
+				return 1;
+
+			const char *substring = substrings[curr_substring];
+			size_t substring_len = strlen(substring);
+
+			// if the substring is an array, parse accordingly
+			if(parse_array(str_origin, substring, sbuffer, buffer, buffer_size, out_info))
 			{
-				while(*p && *p != ARR_OPENING && strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) != 0)
+				if(sbuffer)
+					while(snaky_parse_target_attrib_str(str, sbuffer->data, sbuffer, out_info));
+				else if(buffer && buffer_size > 0)
+					while(snaky_parse_target_attrib_buf(str, buffer, buffer, buffer_size, out_info));
+
+				return 1;
+			}
+
+			// when a substring is encountered:
+			if(strncmp(p, substring, substring_len) == 0)
+			{
+				// first obtain info about the attrib
+				obtain_total_attrib_len(p, out_info);
+				resolve_data_type(p, NULL, out_info);
+				if(out_info)
+					out_info->name_start_pos = p;
+
+				// move to next substring in the list of substrings
+				curr_substring++;
+
+				// move p to end of the current substring
+				p += substring_len;
+
+				// now go to the start of the substrings value
+				skip_whitespace(&p, NULL);
+
+				// if just ';' is found, then the value is UNDEF
+				if(*p == ATTRIB_DELIM)
+				{
+					if(sbuffer)
+						snaky_strcpy(sbuffer, "UNDEF");
+					else if(buffer && buffer_size > 0)
+						snprintf(buffer, buffer_size, "UNDEF");
+					return_next_start_pos(p, out_info);
+					return 1;
+				}
+
+				if(*p == '=')
+				{
 					p++;
-				if(!*p)
-				{
-					vl_log(VL_ERROR, "Unexpected termination of string: '%s'!\n", str);
-					return 0;
-				}
-				// see if a nested attribute string was found, meaning the array element cannot be parsed directly
-				if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0)
-				{
-					vl_log(VL_ERROR, "Array elements cannot be parsed yet, a nested attribute string was encountered: '%s'!\n", p);
-					return 0;
-				}
+					skip_whitespace(&p, NULL);
 
-				const char *array_start = p;
-
-				const char *array_end = find_end_of_array(array_start);
-				if(!array_end)
-				{
-					vl_log(VL_ERROR, "No end of array found: '%s'!\n", array_start);
-					return 0;
-				}
-
-				// convert index strings to ints in an array
-				int real_indices[num_indices];
-				for(size_t i = 0; i < num_indices; ++i)
-				{
-					int s = 0;
-					real_indices[i] = snaky_parse_int(str_origin, index_values[i], &s);
-					if(s == 0 || real_indices[i] < 0)
+					if(!parse_value(str, p, sbuffer, buffer, buffer_size, NULL, out_info))
 					{
-						vl_log(VL_ERROR, "Failed to parse index: '%s'!\n", index_values[i]);
+						vl_log(VL_ERROR, "Failed to parse substring: '%s' in string: '%s'!\n", substring, str);
 						return 0;
 					}
 				}
 
-				// when the array is found, go to the specific index in the array
-				const char *elem_start = NULL;
-				if(!find_array_element(array_start, array_end, real_indices, num_indices, 0, &elem_start))
+				if(!*p)
 				{
-					vl_log(VL_ERROR, "Failed to locate array element: '%s'!\n", attrib_name);
+					vl_log(VL_ERROR, "Unexpected termination of string! Failed to find substring '%s' in string: '%s'!\n", substring, str);
 					return 0;
 				}
-
-				return parse_array_element(str_origin, array_start, array_end, elem_start, sbuffer, buffer, buffer_size, out_info);
 			}
 		}
 
+		// if the end of the string was reached, return 0 because the last substring was not resolved
+		vl_log(VL_ERROR, "End of string reached! Failed to find substring '%s' in string: '%s'!\n", substring, str);
 		return 0;
 	}
 
-	bool in_attrib_string = false;
+	// see if user searching for a value within an array (requires '[N]' in 'attrib_name')
+	if(parse_array(str_origin, attrib_name, sbuffer, buffer, buffer_size, out_info))
+	{
+		if(sbuffer)
+			while(snaky_parse_target_attrib_str(str, sbuffer->data, sbuffer, out_info));
+		else if(buffer && buffer_size > 0)
+			while(snaky_parse_target_attrib_buf(str, buffer, buffer, buffer_size, out_info));
+
+		return 1;
+	}
+
+	// track where the current attrib string ends
+	const char *curr_attrib_string_end = NULL;
 
 	for(const char *p = str; *p; ++p)
 	{
 		// get char
 		char c = *p;
 
-		// exit an attrib string when '}>' is found
-		if(strncmp(p, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) == 0 && in_attrib_string)
-			in_attrib_string = false;
-
-		/*
-		   also exit the current attrib string when an
-		   object is encountered
-
-		   this way, when the next '<' is found for the
-		   object, its fields can be parsed as well
-		*/
-		if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0 && in_attrib_string)
-			in_attrib_string = false;
-
-		// when the first '<' or ',' is encountered, compare attrib to the target arg
-		if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0 && !in_attrib_string)
+		// exit an attrib string when the matching '}>' is found
+		if(p == curr_attrib_string_end)
 		{
-			// now the parser is in an attribute string
-			in_attrib_string = true;
+			curr_attrib_string_end = NULL;
+			// skip the end of the attrib string
+			p += strlen(ATTRIB_STRING_CLOSING);
+			continue;
+		}
+
+		// if an attribute string is encountered:
+		if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0)
+		{
+			// if not currently in an attribute string, enter this one
+			if(!curr_attrib_string_end)
+			{
+				// now the parser is in an attribute string
+				curr_attrib_string_end = find_end_of_attribs(p);
+				if(!curr_attrib_string_end)
+				{
+					vl_log(VL_ERROR, "Expected end of attribute string: '%s'!\n", p);
+					return 0;
+				}
+			}
 
 			// compare the attribute with the target attribute
 			const char *attribs_start = p + strlen(ATTRIB_STRING_OPENING);
@@ -1485,14 +1543,14 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 				resolve_data_type(attribs_start, NULL, out_info);
 				if(out_info)
 					out_info->name_start_pos = attribs_start;
-				return parse_target_attrib(str_origin, attribs_start, sbuffer, buffer, buffer_size, attrib_name, attrib_len, out_info);
+				return parse_target_attrib(str_origin, attribs_start, attrib_name, attrib_len, sbuffer, buffer, buffer_size, out_info);
 			}
 
 			continue;
 		}
 
 		// parse all subsequent attributes in an attrib string
-		if(c == ATTRIB_DELIM && in_attrib_string)
+		if(c == ATTRIB_DELIM && curr_attrib_string_end)
 		{
 			// same logic as above
 			const char *attribs_start = p + 1;
@@ -1506,13 +1564,24 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 				return 0;
 			}
 
+			/*// see if this was the last attribute in the string
+			if(strncmp(attribs_start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) == 0)
+				attribs_start += strlen(ATTRIB_STRING_CLOSING);
+
+			skip_whitespace(&attribs_start, NULL);
+
+			if(*attribs_start == ATTRIB_DELIM)
+				attribs_start++;
+
+			skip_whitespace(&attribs_start, NULL);*/
+
 			if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
 			{
 				obtain_total_attrib_len(attribs_start, out_info);
 				resolve_data_type(attribs_start, NULL, out_info);
 				if(out_info)
 					out_info->name_start_pos = attribs_start;
-				return parse_target_attrib(str_origin, attribs_start, sbuffer, buffer, buffer_size, attrib_name, attrib_len, out_info);
+				return parse_target_attrib(str_origin, attribs_start, attrib_name, attrib_len, sbuffer, buffer, buffer_size, out_info);
 			}
 
 			continue;
@@ -1683,7 +1752,8 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 	if(!str || strlen(str) == 0)
 		return 0;
 
-	bool in_attrib_string = false;
+	// track where the current attrib string ends
+	const char *curr_attrib_string_end = NULL;
 
 	for(const char *p = str; *p; ++p)
 	{
@@ -1694,28 +1764,28 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		if(isalpha(c))
 			return parse_attrib(str_origin, p, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_info);
 
-		// if the first char is a string marker, skip the string entirely
-		if(c == STR_MARKER_1 || c == STR_MARKER_2)
+		// exit an attrib string when '}>' is found
+		if(p == curr_attrib_string_end)
 		{
-			const char *start_of_str = p;
-
-			const char *end_of_str = find_end_of_str(p);
-			if(!end_of_str)
-			{
-				vl_log(VL_ERROR, "Object was never closed in string: '%s'!\n", start_of_str);
-				return 0;
-			}
-
-			while(*p && p != end_of_str)
-				++p;
-
+			curr_attrib_string_end = NULL;
+			// skip the end of the attrib string
+			p += strlen(ATTRIB_STRING_CLOSING);
 			continue;
 		}
 
-		// when the first '<' or ',' is encountered, see what the very next attrib is
-		if((strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0 || c == ATTRIB_DELIM) && !in_attrib_string)
+		// if an attribute string is encountered:
+		if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0)
 		{
-			in_attrib_string = true;
+			// if not currently in an attribute string, enter this one
+			if(!curr_attrib_string_end)
+			{
+				curr_attrib_string_end = find_end_of_attribs(p);
+				if(!curr_attrib_string_end)
+				{
+					vl_log(VL_ERROR, "Expected end of attribute string: '%s'!\n", p);
+					return 0;
+				}
+			}
 
 			const char *attribs_start = p + strlen(ATTRIB_STRING_OPENING);
 
@@ -1731,7 +1801,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		}
 
 		// parse the very next attrib found
-		if(c == ATTRIB_DELIM && in_attrib_string)
+		if(c == ATTRIB_DELIM && curr_attrib_string_end)
 		{
 			const char *attribs_start = p + 1;
 
@@ -1743,27 +1813,20 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 				return 0;
 			}
 
+			// TODO remove as well?:
+			// see if this was the last attribute in the string
+			if(strncmp(attribs_start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) == 0)
+				attribs_start += strlen(ATTRIB_STRING_CLOSING);
+
+			skip_whitespace(&attribs_start, NULL);
+
+			if(*attribs_start == ATTRIB_DELIM)
+				attribs_start++;
+
+			skip_whitespace(&attribs_start, NULL);
+
 			return parse_attrib(str_origin, attribs_start, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_info);
 		}
-
-		// nested attributes are skipped
-		if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0 && in_attrib_string)
-		{
-			while(*p && *p != '>')
-				++p;
-
-			if(!*p)
-			{
-				vl_log(VL_ERROR, "Expected '>' in nested attribute string: '%s'!\n", str);
-				return 0;
-			}
-
-			continue;
-		}
-
-		// exit an attrib string when '>' is found
-		if(strncmp(p, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) == 0 && in_attrib_string)
-			in_attrib_string = false;
 	}
 
 	return 0;

@@ -23,7 +23,7 @@
   Define SNAKY_CUSTOM_BUF_SIZE to change the default
   buffer size in snaky_strings.
 
-  The default buffer size is 128.
+  The default buffer size is 256.
 */
 #ifdef SNAKY_CUSTOM_BUF_SIZE
 	#define SNAKY_BUF_SIZE SNAKY_CUSTOM_BUF_SIZE
@@ -34,7 +34,7 @@
 	  To override this value, define SNAKY_CUSTOM_BUF_SIZE
 	  and set it equal to your custom buffer size.
 	*/
-	#define SNAKY_BUF_SIZE 128
+	#define SNAKY_BUF_SIZE 256
 #endif
 
 /**
