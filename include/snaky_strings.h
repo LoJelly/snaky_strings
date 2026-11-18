@@ -59,10 +59,10 @@
 
 /**
   When trying to parse a target attribute using nested attributes,
-  such as "obj.a.b", the max number of substrings allowed
-  is equal to this value.
+  such as "obj.a.b" or "obj->a->b", the max number of chained
+  attributes allowed is equal to this value.
 */
-#define SNAKY_MAX_SUBSTRINGS 32
+#define SNAKY_MAX_CHAINED_ATTRIBS 32
 /**
   The max amount of dimensions a single array can have.
 */

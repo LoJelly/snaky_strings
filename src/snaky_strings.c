@@ -8,27 +8,38 @@
 #include "dynamic_map_spellbook.h"
 #include "snaky_strings.h"
 
-// number of bytes a snaky_string will increase by as an attrib string is parsed
+// number of bytes a snaky_string will increase by automatically in some functions (parsing a string, reading a file, etc.)
 #define STR_CAPACITY_INCREASE 50
 
 // syntax and key marker characters:
 #define ATTRIB_STRING_OPENING "{<"
+#define ATTRIB_STRING_OPENING_LEN 2
 #define ATTRIB_STRING_CLOSING ">}"
+#define ATTRIB_STRING_CLOSING_LEN ATTRIB_STRING_OPENING_LEN
+
 #define LABEL_OPENING "/["
+#define LABEL_OPENING_LEN 2
 #define LABEL_CLOSING "]/"
+#define LABEL_CLOSING_LEN LABEL_OPENING_LEN
+
 #define COMMENT_OPENING "/*"
+#define COMMENT_OPENING_LEN 2
 #define COMMENT_CLOSING "*/"
+#define COMMENT_CLOSING_LEN COMMENT_OPENING_LEN
+
 #define ARR_OPENING '['
 #define ARR_CLOSING ']'
 #define ARR_ELEM_DELIM ','
 #define ATTRIB_DELIM ';'
 #define DATA_TYPE_ASSIGNMENT ':'
-#define OBJ_FIELD_DELIM '.'
+
+#define CHAINED_ATTRIB_DELIM '.'
+
 #define EXPR_OPENING '('
 #define EXPR_CLOSING ')'
 // strings can be created using "string" or 'string'
-#define STR_MARKER_1 '"'
-#define STR_MARKER_2 '\''
+#define DOUBLE_QUOTE '"'
+#define SINGLE_QUOTE '\''
 
 static bool init = false;
 
@@ -405,9 +416,9 @@ static const char *find_end_of_str(const char *start)
 {
 	// the first char should be " or ', now move until the matching string marker is found
 	bool search_for_double_quotes = false, search_for_single_quote = false;
-	if(*start == '"')
+	if(*start == DOUBLE_QUOTE)
 		search_for_double_quotes = true;
-	else if(*start == '\'')
+	else if(*start == SINGLE_QUOTE)
 		search_for_single_quote = true;
 	else
 		return NULL;
@@ -475,7 +486,7 @@ static void skip_whitespace(const char **str, size_t *out_num_spaces)
 		*out_num_spaces = 0;
 
 	// skip all comments found
-	while(strncmp(*str, COMMENT_OPENING, strlen(COMMENT_OPENING)) == 0)
+	while(strncmp(*str, COMMENT_OPENING, COMMENT_OPENING_LEN) == 0)
 		skip_comment(str, out_num_spaces);
 
 	// now skip all spaces, and comments found after those spaces
@@ -486,7 +497,7 @@ static void skip_whitespace(const char **str, size_t *out_num_spaces)
 		(*str)++;
 
 		// skip any comments found
-		while(strncmp(*str, COMMENT_OPENING, strlen(COMMENT_OPENING)) == 0)
+		while(strncmp(*str, COMMENT_OPENING, COMMENT_OPENING_LEN) == 0)
 			skip_comment(str, out_num_spaces);
 	}
 }
@@ -504,7 +515,7 @@ static void obtain_total_attrib_len(const char *start, snaky_attrib_info *out_in
 	if(out_info)
 	{
 		// move forward until the end of the string or end of the attribute string
-		while(*start && strncmp(start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0)
+		while(*start && strncmp(start, ATTRIB_STRING_CLOSING, ATTRIB_STRING_CLOSING_LEN) != 0)
 		{
 			start++;
 			out_info->total_len++;
@@ -626,35 +637,41 @@ static void trim_trailing_whitespace_from_value(snaky_string *sbuffer, char *buf
 {
 	// only trim trailing whitespace when the value is not a string (example of a string: "..., str = "some string!!    ""):
 	char *buf = sbuffer ? sbuffer->data : buffer;
-	char *start_of_str = buf;
-	char *end_of_str = buf + strlen(buf) - 1;
+	char *end_of_buf = buf + strlen(buf) - 1;
 
 	// if a valid string, do not trim
-	if((*buf == STR_MARKER_1 || *buf == STR_MARKER_2) && find_end_of_str(buf) != NULL)
+	if((*buf == DOUBLE_QUOTE || *buf == SINGLE_QUOTE) && find_end_of_str(buf) != NULL)
 		return;
 
 	// otherwise, trim:
 
 	// walk from end to the start, tracking all whitespace:
-	while(end_of_str != start_of_str && isspace(*end_of_str))
-		end_of_str--;
+	while(end_of_buf != buf && isspace(*end_of_buf))
+		end_of_buf--;
 
 	// if whitespace was found, the pointers will not be equal
-	if(end_of_str != start_of_str)
-		*(end_of_str + 1) = '\0';
+	if(end_of_buf != buf)
+		*(end_of_buf + 1) = '\0';
 }
 static void return_next_start_pos(const char *attribs_start, snaky_attrib_info *out_info)
 {
 	if(out_info)
 	{
-		while(*attribs_start && *attribs_start != ATTRIB_DELIM && strncmp(attribs_start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0)
+		while(*attribs_start && *attribs_start != ATTRIB_DELIM && strncmp(attribs_start, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) != 0)
 			attribs_start++;
+
+		if(*attribs_start == ATTRIB_DELIM)
+		{
+			attribs_start++;
+			skip_whitespace(&attribs_start, NULL);
+		}
 
 		if(!*attribs_start)
 			out_info->next_start_pos = NULL;
 		else
 		{
 			skip_whitespace(&attribs_start, NULL);
+			vl_log(VL_DEBUG, "next attrib pos is '%s'!\n", attribs_start);
 			out_info->next_start_pos = attribs_start;
 		}
 	}
@@ -669,7 +686,7 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 		const char *value_start_copy_origin = value_start;
 		const char *value_start_copy = value_start;
 
-		while(*value_start_copy && strncmp(value_start_copy, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0 && *value_start_copy != ATTRIB_DELIM)
+		while(*value_start_copy && strncmp(value_start_copy, ATTRIB_STRING_CLOSING, ATTRIB_STRING_CLOSING_LEN) != 0 && *value_start_copy != ATTRIB_DELIM)
 			// move end_pos pointer
 			end_pos = value_start_copy++;
 
@@ -1258,14 +1275,14 @@ static int parse_array(const char *const str_origin, const char *const array, sn
 		{
 			if(strncmp(a, array, actual_array_len) == 0)
 			{
-				while(*a && *a != ARR_OPENING && strncmp(a, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) != 0)
+				while(*a && *a != ARR_OPENING && strncmp(a, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) != 0)
 					a++;
 				if(!*a)
 				{
 					vl_log(VL_ERROR, "Unexpected termination of string: '%s'!\n", array);
 					return 0;
 				}
-				if(strncmp(a, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0)
+				if(strncmp(a, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) == 0)
 				{
 					vl_log(VL_ERROR, "Array elements cannot be parsed yet, a nested attribute string was encountered: '%s'!\n", a);
 					return 0;
@@ -1335,91 +1352,92 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		return 0;
 
 	// see if user is trying to find a nested attribute :
-	char substrings[SNAKY_MAX_SUBSTRINGS][SNAKY_BUF_SIZE] = {0};
-	size_t num_substrings = 0;
+	char chained_attribs[SNAKY_MAX_CHAINED_ATTRIBS][SNAKY_BUF_SIZE] = {0};
+	size_t num_chained_attribs = 0;
 
-	char substring[SNAKY_BUF_SIZE] = {0};
-	size_t substring_iter = 0;
-	bool at_least_one_subfield_found = false;
+	char chained_attrib[SNAKY_BUF_SIZE] = {0};
+	size_t chained_attrib_iter = 0;
+	bool at_least_one_chained_attrib_found = false;
 	for(const char *p = attrib_name; *p; ++p)
 	{
-		if(substring_iter + 1 >= sizeof(substring))
+		if(chained_attrib_iter + 1 >= sizeof(chained_attrib))
 			break;
 
-		// if a space is found, stop parsing substrings (substrings must be chained together with no whitespace)
+		// if a space is found, stop parsing chained attribs (chained attribs must be chained together with no whitespace)
 		if(isspace(*p))
 		{
-			// reset all substring data just in case some were already parsed
-			at_least_one_subfield_found = false;
-			num_substrings = 0;
+			// reset all chained attrib data just in case some were already parsed
+			at_least_one_chained_attrib_found = false;
+			num_chained_attribs = 0;
 			break;
 		}
 
-		// check for a '.' which means the current substring has ended
-		if(*p == OBJ_FIELD_DELIM)
+		// check for a '.' which means the current chained attrib has ended
+		if(*p == CHAINED_ATTRIB_DELIM)
 		{
 			// if no more rows, error out
-			if(num_substrings >= SNAKY_MAX_SUBSTRINGS)
+			if(num_chained_attribs >= SNAKY_MAX_CHAINED_ATTRIBS)
 			{
-				vl_log(VL_ERROR, "Max number of substrings allowed in targeted nested attribute string: '%s'\n", attrib_name);
+				vl_log(VL_ERROR, "Max number of chained attributes reached in targeted nested attribute string: '%s'\n", attrib_name);
 				return 0;
 			}
 
-			// end the current substring
-			substring[substring_iter] = '\0';
+			// end the current chained attrib
+			chained_attrib[chained_attrib_iter] = '\0';
 
-			// otherwise, add the new substring to the array
-			strcpy(substrings[num_substrings++], substring);
+			// otherwise, add the new chained attrib to the array
+			strcpy(chained_attribs[num_chained_attribs++], chained_attrib);
 
-			// reset data for next substring
-			substring_iter = 0;
+			// reset data for next chained attrib
+			chained_attrib_iter = 0;
 
 			// signal that at least one period was found
-			at_least_one_subfield_found = true;
+			at_least_one_chained_attrib_found = true;
 
 			continue;
 		}
 
-		// if not on a '.' yet, add the current char to the current substring array
-		substring[substring_iter++] = *p;
+		// if not on a '.' yet, add the current char to the current chained attrib array
+		chained_attrib[chained_attrib_iter++] = *p;
 
-		// if the next char is the null terminator and at least one other field was found, end the last substring
-		if(*(p + 1) == '\0' && at_least_one_subfield_found)
+		// if the next char is the null terminator and at least one other field was found, end the last chained attrib
+		if(*(p + 1) == '\0' && at_least_one_chained_attrib_found)
 		{
 			// same logic as for when the '.' is found:
 
-			if(num_substrings >= SNAKY_MAX_SUBSTRINGS)
+			if(num_chained_attribs >= SNAKY_MAX_CHAINED_ATTRIBS)
 			{
-				vl_log(VL_ERROR, "Max number of substrings allowed in targeted nested attribute string: '%s'\n", attrib_name);
+				vl_log(VL_ERROR, "Max number of chained attributes reached in targeted nested attribute string: '%s'\n", attrib_name);
 				return 0;
 			}
 
-			substring[substring_iter] = '\0';
+			chained_attrib[chained_attrib_iter] = '\0';
 
-			strcpy(substrings[num_substrings++], substring);
+			strcpy(chained_attribs[num_chained_attribs++], chained_attrib);
 
-			substring_iter = 0;
+			chained_attrib_iter = 0;
 
 			continue;
 		}
 	}
 
-	// see if any substrings were parsed
-	size_t curr_substring = 0;
-	if(num_substrings > 0)
+	// see if any chained attribs were parsed
+	size_t curr_chained_attrib = 0;
+	snaky_attrib_info cursor_info = {0};
+	if(num_chained_attribs > 0)
 	{
-		// and if so, iterate over the string and find each substring and parse until the final one is found
+		// and if so, iterate over the string and find each chained attrib and parse until the final one is found
 		for(const char *p = str; *p; ++p)
 		{
-			// when the number of substrings match, that means the last substring was parsed successfully
-			if(curr_substring > num_substrings)
+			// when the number of chained attribs match, that means the last chained attrib was parsed successfully
+			if(curr_chained_attrib > num_chained_attribs)
 				return 1;
 
-			const char *substring = substrings[curr_substring];
-			size_t substring_len = strlen(substring);
+			const char *chained_attrib = chained_attribs[curr_chained_attrib];
+			size_t chained_attrib_len = strlen(chained_attrib);
 
-			// if the substring is an array, parse accordingly
-			if(parse_array(str_origin, substring, sbuffer, buffer, buffer_size, out_info))
+			// if the chained attrib is an array, parse accordingly
+			if(parse_array(str_origin, chained_attrib, sbuffer, buffer, buffer_size, out_info))
 			{
 				if(sbuffer)
 					while(snaky_parse_target_attrib_str(str, sbuffer->data, sbuffer, out_info));
@@ -1429,8 +1447,8 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 				return 1;
 			}
 
-			// when a substring is encountered:
-			if(strncmp(p, substring, substring_len) == 0)
+			// when the chained attrib is encountered:
+			if(strncmp(p, chained_attrib, chained_attrib_len) == 0)
 			{
 				// first obtain info about the attrib
 				obtain_total_attrib_len(p, out_info);
@@ -1438,13 +1456,13 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 				if(out_info)
 					out_info->name_start_pos = p;
 
-				// move to next substring in the list of substrings
-				curr_substring++;
+				// move to next chained attrib in the list of chained attribs
+				curr_chained_attrib++;
 
-				// move p to end of the current substring
-				p += substring_len;
+				// move p to end of the current chained attrib
+				p += chained_attrib_len;
 
-				// now go to the start of the substrings value
+				// now go to the start of the chained attrib value
 				skip_whitespace(&p, NULL);
 
 				// if just ';' is found, then the value is UNDEF
@@ -1463,23 +1481,30 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 					p++;
 					skip_whitespace(&p, NULL);
 
-					if(!parse_value(str, p, sbuffer, buffer, buffer_size, NULL, out_info))
+					if(!parse_value(str, p, sbuffer, buffer, buffer_size, NULL, &cursor_info))
 					{
-						vl_log(VL_ERROR, "Failed to parse substring: '%s' in string: '%s'!\n", substring, str);
+						vl_log(VL_ERROR, "Failed to parse chained attribute: '%s' in string: '%s'!\n", chained_attrib, str);
 						return 0;
 					}
+
+					// when a value is successfully parsed, move 'p' to the value start pos in 'cursor_info'
+					p = cursor_info.value_start_pos;
+
+					// copy logic over to user's info
+					if(out_info)
+						*out_info = cursor_info;
 				}
 
 				if(!*p)
 				{
-					vl_log(VL_ERROR, "Unexpected termination of string! Failed to find substring '%s' in string: '%s'!\n", substring, str);
+					vl_log(VL_ERROR, "Unexpected termination of string! Failed to find chained attribute '%s' in string: '%s'!\n", chained_attrib, str);
 					return 0;
 				}
 			}
 		}
 
-		// if the end of the string was reached, return 0 because the last substring was not resolved
-		vl_log(VL_ERROR, "End of string reached! Failed to find substring '%s' in string: '%s'!\n", substring, str);
+		// if the end of the string was reached, return 0 because the last chained attrib was not resolved
+		vl_log(VL_ERROR, "End of string reached! Failed to find chained attribute '%s' in string: '%s'!\n", chained_attrib, str);
 		return 0;
 	}
 
@@ -1507,12 +1532,12 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		{
 			curr_attrib_string_end = NULL;
 			// skip the end of the attrib string
-			p += strlen(ATTRIB_STRING_CLOSING);
+			p += ATTRIB_STRING_CLOSING_LEN;
 			continue;
 		}
 
 		// if an attribute string is encountered:
-		if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0)
+		if(strncmp(p, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) == 0)
 		{
 			// if not currently in an attribute string, enter this one
 			if(!curr_attrib_string_end)
@@ -1527,7 +1552,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 			}
 
 			// compare the attribute with the target attribute
-			const char *attribs_start = p + strlen(ATTRIB_STRING_OPENING);
+			const char *attribs_start = p + ATTRIB_STRING_OPENING_LEN;
 
 			skip_whitespace(&attribs_start, NULL);
 
@@ -1563,17 +1588,6 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 				vl_log(VL_ERROR, "Unexpected termination of attribute string: '%s'!\n", str);
 				return 0;
 			}
-
-			/*// see if this was the last attribute in the string
-			if(strncmp(attribs_start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) == 0)
-				attribs_start += strlen(ATTRIB_STRING_CLOSING);
-
-			skip_whitespace(&attribs_start, NULL);
-
-			if(*attribs_start == ATTRIB_DELIM)
-				attribs_start++;
-
-			skip_whitespace(&attribs_start, NULL);*/
 
 			if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
 			{
@@ -1611,7 +1625,7 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 	// 'attribs_start' points to the first char in the attrib name
 	size_t i = 0;
 	bool data_type_resolved = false;
-	while(*attribs_start && *attribs_start != '=' && *attribs_start != ATTRIB_DELIM && strncmp(attribs_start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0)
+	while(*attribs_start && *attribs_start != '=' && *attribs_start != ATTRIB_DELIM && strncmp(attribs_start, ATTRIB_STRING_CLOSING, ATTRIB_STRING_CLOSING_LEN) != 0)
 	{
 		if(name_str)
 		{
@@ -1621,7 +1635,7 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 					return 0;
 			}
 		}
-		else if(name_buffer)
+		else if(name_buffer && name_buffer_size > 0)
 		{
 			if(i + 1 >= name_buffer_size)
 			{
@@ -1652,6 +1666,17 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 		name_str->data[i] = '\0';
 	else if(name_buffer && name_buffer_size > 0)
 		name_buffer[i] = '\0';
+
+	// remove trailing whitespace from name string
+	char *buf = name_str ? name_str->data : name_buffer;
+	char *end_of_buf = buf + strlen(buf) - 1;
+
+	while(end_of_buf != buf && isspace(*end_of_buf))
+		end_of_buf--;
+
+	// if whitespace was found, the pointers will not be equal
+	if(end_of_buf != buf)
+		*(end_of_buf + 1) = '\0';
 
 	// if no value found, just ';', use UNDEF for undefined value
 	if(*attribs_start == ATTRIB_DELIM)
@@ -1696,16 +1721,22 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 			out_info->data_type = SNAKY_ARRAY;
 		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, find_end_of_array, out_info);
 	}
-	else if(*attribs_start == STR_MARKER_1 || *attribs_start == STR_MARKER_2)
+	else if(*attribs_start == DOUBLE_QUOTE || *attribs_start == SINGLE_QUOTE)
 	{
 		if(out_info)
 			out_info->data_type = SNAKY_STRING;
 		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, find_end_of_str, out_info);
 	}
+	else if(strncmp(attribs_start, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) == 0)
+	{
+		if(out_info)
+			out_info->data_type = SNAKY_ATTRIB_STRING;
+		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, find_end_of_attribs, out_info);
+	}
 
 	// if not a nested string, copy the attrib value normally
 	i = 0;
-	while(*attribs_start && strncmp(attribs_start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0 && *attribs_start != ATTRIB_DELIM)
+	while(*attribs_start && *attribs_start != ATTRIB_DELIM)
 	{
 		if(value_str)
 		{
@@ -1735,6 +1766,9 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 		value_buffer[i] = '\0';
 	else if(value_str)
 		value_str->data[i] = '\0';
+
+	// see if trailing whitespace should be removed from the value
+	trim_trailing_whitespace_from_value(value_str, value_buffer);
 
 	// return next start pos
 	return_next_start_pos(attribs_start, out_info);
@@ -1769,12 +1803,12 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 		{
 			curr_attrib_string_end = NULL;
 			// skip the end of the attrib string
-			p += strlen(ATTRIB_STRING_CLOSING);
+			p += ATTRIB_STRING_CLOSING_LEN;
 			continue;
 		}
 
 		// if an attribute string is encountered:
-		if(strncmp(p, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) == 0)
+		if(strncmp(p, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) == 0)
 		{
 			// if not currently in an attribute string, enter this one
 			if(!curr_attrib_string_end)
@@ -1787,7 +1821,7 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 				}
 			}
 
-			const char *attribs_start = p + strlen(ATTRIB_STRING_OPENING);
+			const char *attribs_start = p + ATTRIB_STRING_OPENING_LEN;
 
 			skip_whitespace(&attribs_start, NULL);
 
@@ -1812,18 +1846,6 @@ static int prepare_parse_attrib(const char *str, snaky_string *name_str, snaky_s
 				vl_log(VL_ERROR, "Unexpected termination of attribute string: '%s'!\n", str);
 				return 0;
 			}
-
-			// TODO remove as well?:
-			// see if this was the last attribute in the string
-			if(strncmp(attribs_start, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) == 0)
-				attribs_start += strlen(ATTRIB_STRING_CLOSING);
-
-			skip_whitespace(&attribs_start, NULL);
-
-			if(*attribs_start == ATTRIB_DELIM)
-				attribs_start++;
-
-			skip_whitespace(&attribs_start, NULL);
 
 			return parse_attrib(str_origin, attribs_start, name_str, value_str, name_buffer, name_buffer_size, value_buffer, value_buffer_size, out_info);
 		}
@@ -1860,7 +1882,7 @@ int snaky_remove_attrib_buf(char *str, const char *attrib_name)
 
 	/*
 	   the start_pos pointer points to the first character of the attrib value,
-	   so it can be moved backwards to obtain the total length of the sub-string
+	   so it can be moved backwards to obtain the total length of the substring
 
 	   + 2 for the '=' and attribute separator
 	*/
@@ -2015,9 +2037,9 @@ int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name,
 
 		// walk forward in string until the next '>' is hit, but preserve the string's origin ptr
 		const char *origin = buf;
-		while(*buf && strncmp(buf, ATTRIB_STRING_CLOSING, strlen(ATTRIB_STRING_CLOSING)) != 0)
+		while(*buf && strncmp(buf, ATTRIB_STRING_CLOSING, ATTRIB_STRING_CLOSING_LEN) != 0)
 		{
-			if(*buf == STR_MARKER_1 || *buf == STR_MARKER_2)
+			if(*buf == DOUBLE_QUOTE || *buf == SINGLE_QUOTE)
 			{
 				const char *end_of_str = find_end_of_str(buf);
 				if(!end_of_str)
@@ -2236,7 +2258,7 @@ bool snaky_is_string(const char *str)
 		return false;
 
 	// make sure string starts with '"'
-	bool valid_start = *str && (*str == STR_MARKER_1 || *str == STR_MARKER_2);
+	bool valid_start = *str && (*str == DOUBLE_QUOTE || *str == SINGLE_QUOTE);
 
 	// find the matching '}'
 	const char *end_pos = find_end_of_str(str);
@@ -2246,7 +2268,7 @@ bool snaky_is_string(const char *str)
 }
 bool snaky_is_attrib_string(const char *str)
 {
-	if(!str || strncmp(str, ATTRIB_STRING_OPENING, strlen(ATTRIB_STRING_OPENING)) != 0)
+	if(!str || strncmp(str, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) != 0)
 		return false;
 
 	// find the matching '>'
@@ -2296,12 +2318,12 @@ void snaky_goto_label(const char *str, const char *label_name, const char **out_
 	while(*str)
 	{
 		// first, find the "/[" characters
-		if(strncmp(str, LABEL_OPENING, strlen(LABEL_OPENING)) == 0)
+		if(strncmp(str, LABEL_OPENING, LABEL_OPENING_LEN) == 0)
 		{
 			const char *label_origin = str;
 
 			// move past the "/["
-			str += strlen(LABEL_OPENING);
+			str += LABEL_OPENING_LEN;
 
 			skip_whitespace(&str, NULL);
 
@@ -2311,10 +2333,10 @@ void snaky_goto_label(const char *str, const char *label_name, const char **out_
 				// if the names match, now move to the first valid char after the closing "]/" characters
 				while(*str)
 				{
-					if(strncmp(str, LABEL_CLOSING, strlen(LABEL_CLOSING)) == 0)
+					if(strncmp(str, LABEL_CLOSING, LABEL_CLOSING_LEN) == 0)
 					{
 						// move past the "]/"
-						str += strlen(LABEL_CLOSING);
+						str += LABEL_CLOSING_LEN;
 
 						// skip all whitespace again
 						skip_whitespace(&str, NULL);

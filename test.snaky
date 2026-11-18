@@ -1,50 +1,11 @@
-/* the entire program is in a single attribute string! */
-
 {<
-	/* first, init the window! */
-	window = {<
-		title = Game Demo;
-		width = 1280;
-		height = 720;
-		resizable = TRUE;
-		decorated = TRUE;
-		visible = TRUE;
-		icon = 'res/icon.png';
-		bg_color = WHITE;
+	obj1 = {<
+		code = -155;
 	>};
 
-	/* register scenes in an array! */
-	scenes = [TITLE, PAUSE, OPTIONS, MAIN];
+	obj2 = obj1;
 
-	/* create scenes here! */
-	TITLE = {<
-		bg_color = BLUE;
+	obj3 = obj2;
 
-		play_btn = {<
-			/* pos, x, y, color, outline, etc. */
-		>};
-	>};
-
-	PAUSE = {<
-		/* ... */
-	>};
-
-	OPTIONS = {<
-		/* ... */
-	>};
-
-	MAIN = {<
-		/* ... */
-	>};
-
-	/*
-	   here start_scene is set to TITLE,
-	   which means when start_scene
-	   is parsed, it will be equal to
-	   the exact contents of the 'TITLE'
-	   attribute string
-	*/
-	start_scene = TITLE;
-
-	/* ... */
+	num = 44;
 >};
