@@ -109,10 +109,10 @@ Classes</h2></td></tr>
 <tr class="heading"><td colspan="2"><h2 id="header-define-members" class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
 <tr class="memitem:ab290f4a5a4ddf97a9a0a845fb2e353be" id="r_ab290f4a5a4ddf97a9a0a845fb2e353be"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab290f4a5a4ddf97a9a0a845fb2e353be">SNAKY_API</a></td></tr>
-<tr class="memitem:a26ce81d4b8ca3d84c65135bf4fb3bebe" id="r_a26ce81d4b8ca3d84c65135bf4fb3bebe"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a26ce81d4b8ca3d84c65135bf4fb3bebe">SNAKY_BUF_SIZE</a>&#160;&#160;&#160;128</td></tr>
+<tr class="memitem:a26ce81d4b8ca3d84c65135bf4fb3bebe" id="r_a26ce81d4b8ca3d84c65135bf4fb3bebe"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a26ce81d4b8ca3d84c65135bf4fb3bebe">SNAKY_BUF_SIZE</a>&#160;&#160;&#160;256</td></tr>
 <tr class="memitem:acf41459d0a61383a0a8cd68c1a1d830d" id="r_acf41459d0a61383a0a8cd68c1a1d830d"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#acf41459d0a61383a0a8cd68c1a1d830d">SNAKY_MAX_LINE_LEN</a>&#160;&#160;&#160;256</td></tr>
 <tr class="memitem:a7db518e3bd70204b90a35f4ca01e1bbf" id="r_a7db518e3bd70204b90a35f4ca01e1bbf"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7db518e3bd70204b90a35f4ca01e1bbf">SNAKY_INVALID</a>&#160;&#160;&#160;-1</td></tr>
-<tr class="memitem:a495d602d98ef0b8e75148262d236f131" id="r_a495d602d98ef0b8e75148262d236f131"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a495d602d98ef0b8e75148262d236f131">SNAKY_MAX_SUBSTRINGS</a>&#160;&#160;&#160;32</td></tr>
+<tr class="memitem:ac2c1f59110e3461e405e7d35e5ccc270" id="r_ac2c1f59110e3461e405e7d35e5ccc270"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac2c1f59110e3461e405e7d35e5ccc270">SNAKY_MAX_CHAINED_ATTRIBS</a>&#160;&#160;&#160;32</td></tr>
 <tr class="memitem:a20eca8befa8c0866852bfd37192c8f9f" id="r_a20eca8befa8c0866852bfd37192c8f9f"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a20eca8befa8c0866852bfd37192c8f9f">SNAKY_MAX_ARR_DIMENSIONS</a>&#160;&#160;&#160;12</td></tr>
 <tr class="memitem:a4c8275b906421b1dbca9e37b450cc4b9" id="r_a4c8275b906421b1dbca9e37b450cc4b9"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4c8275b906421b1dbca9e37b450cc4b9">SNAKY_MAX_ARGS</a>&#160;&#160;&#160;16</td></tr>
 </table><table class="memberdecls">
@@ -227,12 +227,12 @@ Functions</h2></td></tr>
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">#define SNAKY_BUF_SIZE&#160;&#160;&#160;128</td>
+          <td class="memname">#define SNAKY_BUF_SIZE&#160;&#160;&#160;256</td>
         </tr>
       </table>
 </div><div class="memdoc">
 <p>Define SNAKY_CUSTOM_BUF_SIZE to change the default buffer size in snaky_strings.</p>
-<p>The default buffer size is 128. The default size of char buffers in snaky_strings.</p>
+<p>The default buffer size is 256. The default size of char buffers in snaky_strings.</p>
 <p>To override this value, define SNAKY_CUSTOM_BUF_SIZE and set it equal to your custom buffer size. </p>
 
 <p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00037">37</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
@@ -290,6 +290,23 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="ac2c1f59110e3461e405e7d35e5ccc270" name="ac2c1f59110e3461e405e7d35e5ccc270"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac2c1f59110e3461e405e7d35e5ccc270">&#9670;&#160;</a></span>SNAKY_MAX_CHAINED_ATTRIBS</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define SNAKY_MAX_CHAINED_ATTRIBS&#160;&#160;&#160;32</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>When trying to parse a target attribute using nested attributes, such as "obj.a.b" or "obj-&gt;a-&gt;b", the max number of chained attributes allowed is equal to this value. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00065">65</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+
+</div>
+</div>
 <a id="acf41459d0a61383a0a8cd68c1a1d830d" name="acf41459d0a61383a0a8cd68c1a1d830d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#acf41459d0a61383a0a8cd68c1a1d830d">&#9670;&#160;</a></span>SNAKY_MAX_LINE_LEN</h2>
 
@@ -305,23 +322,6 @@ Functions</h2></td></tr>
 <p>The default max line length is 256. The default maximum line length in a snaky_strings file. </p>
 
 <p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00052">52</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
-
-</div>
-</div>
-<a id="a495d602d98ef0b8e75148262d236f131" name="a495d602d98ef0b8e75148262d236f131"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a495d602d98ef0b8e75148262d236f131">&#9670;&#160;</a></span>SNAKY_MAX_SUBSTRINGS</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define SNAKY_MAX_SUBSTRINGS&#160;&#160;&#160;32</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<p>When trying to parse a target attribute using nested attributes, such as "obj.a.b", the max number of substrings allowed is equal to this value. </p>
-
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00065">65</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>

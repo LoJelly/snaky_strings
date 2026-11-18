@@ -820,7 +820,7 @@ static int find_array_element(const char *array_start, const char *array_end, co
 			if(*elem_start != ARR_OPENING)
 				return 0;
 
-			// recursively re-find the desired element or nested array:
+			// recursively locate the desired element or nested array:
 			return find_array_element(elem_start, elem_end, indices, num_indices, depth + 1, out_elem_start);
 		}
 
@@ -1017,8 +1017,6 @@ static int parse_dimensions(const char *str_origin, const char *attrib_name, siz
 	// max_depth tracks the most amount of nested arrays currently found
 	size_t max_depth = 0;
 
-	// TODO add empty element validation (ex.: [0,,1] should fail)?
-
 	const char *array_start = NULL;
 	for(const char *p = str_origin; *p; ++p)
 	{
@@ -1099,6 +1097,14 @@ static int parse_dimensions(const char *str_origin, const char *attrib_name, siz
 					comma_counts[depth - 1]++;
 
 					p++;
+
+					// if multiple commas are found, error out (every index must have a valid element)
+					skip_whitespace(&p, NULL);
+					if(*p == ARR_ELEM_DELIM)
+					{
+						vl_log(VL_ERROR, "Empty element encountered: '%s'!\n", array_start);
+						return 0;
+					}
 					continue;
 				}
 
@@ -1174,14 +1180,17 @@ static int parse_dimensions(const char *str_origin, const char *attrib_name, siz
 		vl_log(VL_ERROR, "Failed to parse dimensions in array: '%s'!\n", array_start);
 	return 0;
 }
-static size_t parse_index(const char *str_origin, const char **index_values, size_t num_indices, size_t *dimensions, size_t num_dimensions, int *out_success)
+static size_t parse_index(const char *str_origin, const char **index_values, size_t num_indices, size_t *dimensions, size_t num_dimensions, int *out_success, char *out_error_msg_buf, size_t out_error_msg_buf_size)
 {
 	// default to failure status
 	*out_success = 0;
 
 	// make sure invalid array elements won't be read later
 	if(num_indices == 0 || num_indices > num_dimensions)
+	{
+		snprintf(out_error_msg_buf, out_error_msg_buf_size, "invalid number of indices or dimensions");
 		return 0;
+	}
 
 	// parse each individual index and add to final_index
 	size_t final_index = 0;
@@ -1189,23 +1198,29 @@ static size_t parse_index(const char *str_origin, const char **index_values, siz
 	{
 		int idx = snaky_parse_int(str_origin, index_values[i], out_success);
 		if(*out_success == 0)
+		{
+			snprintf(out_error_msg_buf, out_error_msg_buf_size, "failed to convert '%s' to an integer", index_values[i]);
 			return 0;
+		}
 
 		if(idx < 0 || (size_t) idx >= dimensions[i])
 		{
 			*out_success = 0;
+			snprintf(out_error_msg_buf, out_error_msg_buf_size, "index '%s' is out of bounds", index_values[i]);
 			return 0;
 		}
 
 		if(dimensions[i] == 0)
 		{
 			*out_success = 0;
+			snprintf(out_error_msg_buf, out_error_msg_buf_size, "invalid dimension count");
 			return 0;
 		}
 
 		if(final_index > (SIZE_MAX - (size_t) idx) / dimensions[i])
 		{
 			*out_success = 0;
+			snprintf(out_error_msg_buf, out_error_msg_buf_size, "resolved index exceeds SIZE_MAX");
 			return 0;
 		}
 
@@ -1263,10 +1278,11 @@ static int parse_array(const char *const str_origin, const char *const array, sn
 			return 0;
 
 		int s = 0;
-		int index = parse_index(str_origin, index_values_ptr, num_indices, dimensions, num_dimensions, &s);
+		char error_msg_buf[SNAKY_BUF_SIZE] = {0};
+		int index = parse_index(str_origin, index_values_ptr, num_indices, dimensions, num_dimensions, &s, error_msg_buf, sizeof(error_msg_buf));
 		if(s == 0)
 		{
-			vl_log(VL_ERROR, "Invalid index or failed parsing: '%s'!\n", array);
+			vl_log(VL_ERROR, "Failed to parse index: %s for array '%s'!\n", error_msg_buf, array);
 			return 0;
 		}
 

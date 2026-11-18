@@ -5,6 +5,6 @@ var searchData=
   ['snaky_5finvalid_2',['SNAKY_INVALID',['../da/dd1/snaky__strings_8h.html#a7db518e3bd70204b90a35f4ca01e1bbf',1,'snaky_strings.h']]],
   ['snaky_5fmax_5fargs_3',['SNAKY_MAX_ARGS',['../da/dd1/snaky__strings_8h.html#a4c8275b906421b1dbca9e37b450cc4b9',1,'snaky_strings.h']]],
   ['snaky_5fmax_5farr_5fdimensions_4',['SNAKY_MAX_ARR_DIMENSIONS',['../da/dd1/snaky__strings_8h.html#a20eca8befa8c0866852bfd37192c8f9f',1,'snaky_strings.h']]],
-  ['snaky_5fmax_5fline_5flen_5',['SNAKY_MAX_LINE_LEN',['../da/dd1/snaky__strings_8h.html#acf41459d0a61383a0a8cd68c1a1d830d',1,'snaky_strings.h']]],
-  ['snaky_5fmax_5fsubstrings_6',['SNAKY_MAX_SUBSTRINGS',['../da/dd1/snaky__strings_8h.html#a495d602d98ef0b8e75148262d236f131',1,'snaky_strings.h']]]
+  ['snaky_5fmax_5fchained_5fattribs_5',['SNAKY_MAX_CHAINED_ATTRIBS',['../da/dd1/snaky__strings_8h.html#ac2c1f59110e3461e405e7d35e5ccc270',1,'snaky_strings.h']]],
+  ['snaky_5fmax_5fline_5flen_6',['SNAKY_MAX_LINE_LEN',['../da/dd1/snaky__strings_8h.html#acf41459d0a61383a0a8cd68c1a1d830d',1,'snaky_strings.h']]]
 ];
