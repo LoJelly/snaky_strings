@@ -718,6 +718,31 @@ static void return_next_start_pos(const char *attribs_start, snaky_attrib_info *
 		}
 	}
 }
+
+static void collect_word(const char *str, char *buf, size_t buf_size)
+{
+	size_t i = 0;
+	while(*str && !isspace(*str))
+	{
+		if(i + 1 >= buf_size)
+			break;
+		buf[i++] = *str++;
+	}
+	buf[i] = '\0';
+}
+static int match_word(const char **str, const char *str2, size_t str2_len)
+{
+	char buf[SNAKY_BUF_SIZE] = {0};
+	collect_word(*str, buf, sizeof(buf));
+
+	int match = strncmp(buf, str2, str2_len) == 0;
+
+	if(!match)
+		*str += strlen(buf);
+
+	return match;
+}
+
 static int parse_value(const char *str_origin, const char *value_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *(*end_pos_fn)(const char*), snaky_attrib_info *out_info)
 {
 	const char *end_pos = NULL;
@@ -1026,7 +1051,7 @@ static int parse_target_attrib(const char *str_origin, const char *attribs_start
 	}
 
 	// determine if a nested attribute or string is given
-	if(strncmp(attribs_start, ATTRIB_STRING_OPENING, 2) == 0)
+	if(strncmp(attribs_start, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) == 0)
 	{
 		if(out_info)
 			out_info->data_type = SNAKY_ATTRIB_STRING;
@@ -1063,7 +1088,8 @@ static int parse_dimensions(const char *str_origin, const char *attrib_name, siz
 	for(const char *p = str_origin; *p; ++p)
 	{
 		// find the name of the array
-		if(strncmp(p, attrib_name, attrib_name_len) == 0)
+		//if(strncmp(p, attrib_name, attrib_name_len) == 0)
+		if(match_word(&p, attrib_name, attrib_name_len))
 		{
 			array_start = p;
 
@@ -1506,12 +1532,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 			}
 
 			// when the chained attrib is encountered:
-			// TODO when chained_attrib is 'parent' and the 'p' string has an attrib called '...parent' this results in an error
-			// TODO make it so that before strncmp is called, we collect the entire next word (so if the attrib is 'my_parent'
-			// TODO it checks 'parent' against the whole word of 'my_parent' which automatically fails, skip the entire word.
-			// TODO the only reason this fails is because it goes char by char in 'p' whcih means the 'my_' is skipped
-			// TODO then the 'parent' part of 'my_parent' is matched against 'parent'
-			if(strncmp(p, chained_attrib, chained_attrib_len) == 0)
+			if(match_word(&p, chained_attrib, chained_attrib_len))
 			{
 				// see if the chained attrib is the self keyword
 				if(strcmp(chained_attrib, SELF_KEYWORD) == 0)
@@ -1701,7 +1722,8 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 				return 0;
 			}
 
-			if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
+			//if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
+			if(match_word(&attribs_start, attrib_name, attrib_len))
 			{
 				obtain_total_attrib_len(attribs_start, out_info);
 				resolve_data_type(attribs_start, NULL, out_info);
@@ -1728,7 +1750,8 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 				return 0;
 			}
 
-			if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
+			//if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
+			if(match_word(&attribs_start, attrib_name, attrib_len))
 			{
 				obtain_total_attrib_len(attribs_start, out_info);
 				resolve_data_type(attribs_start, NULL, out_info);
@@ -2431,7 +2454,8 @@ void snaky_goto_attrib(const char *str, const char *attrib_name, const char **ou
 
 	while(*str)
 	{
-		if(strncmp(str, attrib_name, attrib_name_len) == 0)
+		//if(strncmp(str, attrib_name, attrib_name_len) == 0)
+		if(match_word(&str, attrib_name, attrib_name_len))
 		{
 			*out_attrib_pos = str;
 			return;
@@ -2467,7 +2491,8 @@ void snaky_goto_label(const char *str, const char *label_name, const char **out_
 			skip_whitespace(&str, NULL);
 
 			// now see if the name matches
-			if(strncmp(str, label_name, label_name_len) == 0)
+			//if(strncmp(str, label_name, label_name_len) == 0)
+			if(match_word(&str, label_name, label_name_len) == 0)
 			{
 				// if the names match, now move to the first valid char after the closing "]/" characters
 				while(*str)

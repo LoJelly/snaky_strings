@@ -1,14 +1,13 @@
 {<
-	my_parent = {<
-
-		num1 = 1928;
-
-		my_child = {<
-
-			num1 = PARENT.num1;
-
-		>};
-
+	animal = {<
+		name:string;
+		age:int;
+		birth_date:string;
 	>};
 
+	my_dog = {<
+		name = 'Larry';
+		age = 7;
+		birth_date = '4/11/2017';
+	>};
 >};
