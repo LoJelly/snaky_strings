@@ -1,13 +1,14 @@
 {<
-	obj1 = {<
-		code = -155;
+	my_parent = {<
+
+		num1 = 1928;
+
+		my_child = {<
+
+			num1 = PARENT.num1;
+
+		>};
+
 	>};
 
-	obj2 = obj1;
-
-	obj3 = obj2;
-
-	num = 44;
-
-	test_arr = [10, 11, 12, 13];
 >};

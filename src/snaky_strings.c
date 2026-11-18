@@ -41,6 +41,9 @@
 #define DOUBLE_QUOTE '"'
 #define SINGLE_QUOTE '\''
 
+#define SELF_KEYWORD "SELF"
+#define PARENT_KEYWORD "PARENT"
+
 static bool init = false;
 
 // map of constant names to constant values:
@@ -459,7 +462,7 @@ static void skip_comment(const char **str, size_t *out_num_spaces)
 	// after moving to next char, check for a comment
 	const char *comment_origin = *str;
 
-	while(**str && strncmp(*str, COMMENT_CLOSING, strlen(COMMENT_CLOSING)) != 0)
+	while(**str && strncmp(*str, COMMENT_CLOSING, COMMENT_CLOSING_LEN) != 0)
 	{
 		(*str)++;
 
@@ -475,6 +478,27 @@ static void skip_comment(const char **str, size_t *out_num_spaces)
 
 	// when the '*/' is found, skip those last 2 chars
 	(*str) += 2;
+	if(out_num_spaces)
+		*out_num_spaces += 2;
+}
+// skip all comments but backwards
+static void skip_comment_reverse(const char *str_origin, const char **str, size_t *out_num_spaces)
+{
+	const char *comment_origin = *str;
+
+	while(*str != str_origin && strncmp(*str, COMMENT_CLOSING, COMMENT_CLOSING_LEN) != 0)
+	{
+		(*str)--;
+
+		if(out_num_spaces)
+			*out_num_spaces += 1;
+	}
+
+	if(*str == str_origin)
+		return;
+
+	// skip the '/*'
+	(*str) -= 2;
 	if(out_num_spaces)
 		*out_num_spaces += 2;
 }
@@ -499,6 +523,25 @@ static void skip_whitespace(const char **str, size_t *out_num_spaces)
 		// skip any comments found
 		while(strncmp(*str, COMMENT_OPENING, COMMENT_OPENING_LEN) == 0)
 			skip_comment(str, out_num_spaces);
+	}
+}
+// skip whitespace but backwards
+static void skip_whitespace_reverse(const char *str_origin, const char **str, size_t *out_num_spaces)
+{
+	if(out_num_spaces)
+		*out_num_spaces = 0;
+
+	while(*str != str_origin && strncmp(*str, COMMENT_CLOSING, COMMENT_CLOSING_LEN) == 0)
+		skip_comment_reverse(str_origin, str, out_num_spaces);
+
+	while(*str != str_origin && isspace(**str))
+	{
+		if(out_num_spaces)
+			*out_num_spaces += 1;
+		(*str)--;
+
+		while(*str != str_origin && strncmp(*str, COMMENT_CLOSING, COMMENT_CLOSING_LEN) == 0)
+			skip_comment_reverse(str_origin, str, out_num_spaces);
 	}
 }
 
@@ -671,7 +714,6 @@ static void return_next_start_pos(const char *attribs_start, snaky_attrib_info *
 		else
 		{
 			skip_whitespace(&attribs_start, NULL);
-			vl_log(VL_DEBUG, "next attrib pos is '%s'!\n", attribs_start);
 			out_info->next_start_pos = attribs_start;
 		}
 	}
@@ -1464,13 +1506,94 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 			}
 
 			// when the chained attrib is encountered:
+			// TODO when chained_attrib is 'parent' and the 'p' string has an attrib called '...parent' this results in an error
+			// TODO make it so that before strncmp is called, we collect the entire next word (so if the attrib is 'my_parent'
+			// TODO it checks 'parent' against the whole word of 'my_parent' which automatically fails, skip the entire word.
+			// TODO the only reason this fails is because it goes char by char in 'p' whcih means the 'my_' is skipped
+			// TODO then the 'parent' part of 'my_parent' is matched against 'parent'
 			if(strncmp(p, chained_attrib, chained_attrib_len) == 0)
 			{
-				// first obtain info about the attrib
-				obtain_total_attrib_len(p, out_info);
-				resolve_data_type(p, NULL, out_info);
-				if(out_info)
-					out_info->name_start_pos = p;
+				// see if the chained attrib is the self keyword
+				if(strcmp(chained_attrib, SELF_KEYWORD) == 0)
+				{
+					// the self keyword must be the first chained attrib
+					if(curr_chained_attrib != 0)
+					{
+						vl_log(VL_ERROR, "The '%s' keyword must be the first attribute in an attribute chain: '%s'!\n", SELF_KEYWORD, attrib_name);
+						return 0;
+					}
+
+					// reset chained_attrib_len to 0
+					chained_attrib_len = 0;
+
+					// when the self keyword is found, walk back to the very last object before the self keyword
+					while(p != str_origin && strncmp(p, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) != 0)
+						p--;
+
+					// now p points to the first instance of '{<' before the self keyword was found
+
+					// walk back until the '=' is found
+					while(p != str_origin && *p != '=')
+						p--;
+
+					// skip '='
+					p--;
+
+					skip_whitespace_reverse(str_origin, &p, NULL);
+
+					// now walk back until the first space character is found, and that is the new chained attrib replacing the self keyword
+					while(p != str_origin && !isspace(*p))
+					{
+						// the new chained_attrib_len becomes the actual object's name
+						chained_attrib_len++;
+						p--;
+					}
+					// add one to go back to the first char in the attrib name
+					p++;
+				}
+				else if(strcmp(chained_attrib, PARENT_KEYWORD) == 0)
+				{
+					// reset chained_attrib_len to 0
+					chained_attrib_len = 0;
+
+					// when the parent keyword is found, walk back to the 2nd last object before the parent keyword
+					while(p != str_origin && strncmp(p, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) != 0)
+						p--;
+					if(p == str_origin)
+					{
+						vl_log(VL_ERROR, "Cannot access a parent object in this string: '%s'!\n", str_origin);
+						return 0;
+					}
+					p--;
+					while(p != str_origin && strncmp(p, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) != 0)
+						p--;
+
+					// now p points to the 2nd last '{<' before the parent keyword was found
+
+					// walk back until the '=' is found
+					while(p != str_origin && *p != '=')
+						p--;
+
+					// skip '='
+					p--;
+
+					skip_whitespace_reverse(str_origin, &p, NULL);
+
+					// now walk back until the first space character is found, and that is the new chained attrib replacing the parent keyword
+					while(p != str_origin && !isspace(*p))
+					{
+						// the new chained_attrib_len becomes the parent's name
+						chained_attrib_len++;
+						p--;
+					}
+					// add one to go back to the first char in the parent name
+					p++;
+
+					obtain_total_attrib_len(p, out_info);
+					resolve_data_type(p, NULL, out_info);
+					if(out_info)
+						out_info->name_start_pos = p;
+				}
 
 				// move to next chained attrib in the list of chained attribs
 				curr_chained_attrib++;
