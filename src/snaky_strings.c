@@ -722,7 +722,7 @@ static void return_next_start_pos(const char *attribs_start, snaky_attrib_info *
 static void collect_word(const char *str, char *buf, size_t buf_size)
 {
 	size_t i = 0;
-	while(*str && !isspace(*str))
+	while(*str && *str != DATA_TYPE_ASSIGNMENT && !isspace(*str))
 	{
 		if(i + 1 >= buf_size)
 			break;
@@ -1514,7 +1514,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		for(const char *p = str; *p; ++p)
 		{
 			// when the number of chained attribs match, that means the last chained attrib was parsed successfully
-			if(curr_chained_attrib > num_chained_attribs)
+			if(curr_chained_attrib >= num_chained_attribs)
 				return 1;
 
 			const char *chained_attrib = chained_attribs[curr_chained_attrib];
@@ -1571,6 +1571,11 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 					}
 					// add one to go back to the first char in the attrib name
 					p++;
+
+					obtain_total_attrib_len(p, out_info);
+					resolve_data_type(p, NULL, out_info);
+					if(out_info)
+						out_info->name_start_pos = p;
 				}
 				else if(strcmp(chained_attrib, PARENT_KEYWORD) == 0)
 				{
@@ -1636,23 +1641,27 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 					return 1;
 				}
 
+				// if a data type assigment was found, move until the '=' is found
+				if(*p == DATA_TYPE_ASSIGNMENT)
+				{
+					resolve_data_type(p, NULL, out_info);
+					while(*p && *p != '=')
+						p++;
+				}
+
 				if(*p == '=')
 				{
 					p++;
 					skip_whitespace(&p, NULL);
 
-					if(!parse_value(str, p, sbuffer, buffer, buffer_size, NULL, &cursor_info))
+					if(!parse_value(str, p, sbuffer, buffer, buffer_size, NULL, out_info ? out_info : &cursor_info))
 					{
 						vl_log(VL_ERROR, "Failed to parse chained attribute: '%s' in string: '%s'!\n", chained_attrib, str);
 						return 0;
 					}
 
 					// when a value is successfully parsed, move 'p' to the value start pos in 'cursor_info'
-					p = cursor_info.value_start_pos;
-
-					// copy logic over to user's info
-					if(out_info)
-						*out_info = cursor_info;
+					p = out_info ? out_info->value_start_pos : cursor_info.value_start_pos;
 				}
 
 				if(!*p)
@@ -3305,16 +3314,11 @@ void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, s
 {
 	if(!out_success)
 	{
-		vl_log(VL_ERROR, "snaky_parse_value(...) requires 'out_success' to be a valid pointer!\n");
-		return;
-	}
-	if(!out_info)
-	{
-		vl_log(VL_ERROR, "snaky_parse_value(...) requires 'out_info' to be a valid pointer!\n");
+		vl_log(VL_ERROR, "snaky_parse_target_attrib_value(...) requires 'out_success' to be a valid pointer!\n");
 		return;
 	}
 
-	// make sure it is 0 by default
+	// make sure success status is 0 by default
 	*out_success = 0;
 
 	snaky_string attrib = {0};
@@ -3322,7 +3326,7 @@ void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, s
 		return;
 
 	if(snaky_parse_target_attrib_str(str, attrib_name, &attrib, out_info))
-		snaky_parse_value(str, attrib.data, out_info->data_type, out_value, out_success);
+		snaky_parse_value(str, attrib.data, target_type, out_value, out_success);
 
 	snaky_free_str(&attrib);
 
@@ -3331,14 +3335,9 @@ void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, s
 }
 void snaky_parse_target_attrib_value_buf(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, char *buffer, size_t buffer_size, snaky_attrib_info *out_info, int *out_success)
 {
-	if(!out_info)
-	{
-		vl_log(VL_ERROR, "snaky_parse_value(...) requires 'out_info' to be a valid pointer!\n");
-		return;
-	}
 	if(!out_success)
 	{
-		vl_log(VL_ERROR, "snaky_parse_value(...) requires 'out_success' to be a valid pointer!\n");
+		vl_log(VL_ERROR, "snaky_parse_target_attrib_value_buf(...) requires 'out_success' to be a valid pointer!\n");
 		return;
 	}
 
@@ -3359,15 +3358,9 @@ void snaky_parse_target_attrib_value_str(const char *str, const char *attrib_nam
 		return;
 	}
 
-	if(!out_info)
-	{
-		vl_log(VL_ERROR, "snaky_parse_value(...) requires 'out_info' to be a valid pointer!\n");
-		return;
-	}
-
 	if(!out_success)
 	{
-		vl_log(VL_ERROR, "snaky_parse_value(...) requires 'out_success' to be a valid pointer!\n");
+		vl_log(VL_ERROR, "snaky_parse_target_attrib_value_str(...) requires 'out_success' to be a valid pointer!\n");
 		return;
 	}
 

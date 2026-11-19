@@ -1,13 +1,8 @@
 {<
-	animal = {<
-		name:string;
-		age:int;
-		birth_date:string;
-	>};
-
-	my_dog = {<
-		name = 'Larry';
-		age = 7;
-		birth_date = '4/11/2017';
+	window = {<
+		title = Test;
+		width = 1280;
+		height = 720;
+		resizable = TRUE;
 	>};
 >};

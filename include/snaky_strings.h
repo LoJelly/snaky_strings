@@ -130,24 +130,6 @@ typedef struct snaky_attrib_map
 	bool alloc_failure;
 } snaky_attrib_map;
 
-/*
-   TODO introduce new 'template' or 'class' or 'type' type that
-   lets the user just define the fields of that type,
-   like this:
-
-   animal:class = {<
-		name:string;
-		age:int;
-		birth_date:string;
-   >};
-
-   my_dog:animal = {<
-		name = 'Larry';
-		age = 7;
-		birth_date = '4/11/2016';
-   >};
-*/
-
 /**
   The different data types in snaky_strings.
 
