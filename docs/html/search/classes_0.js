@@ -4,5 +4,6 @@ var searchData=
   ['snaky_5fattrib_5finfo_1',['snaky_attrib_info',['../d3/dde/structsnaky__attrib__info.html',1,'']]],
   ['snaky_5fattrib_5flist_2',['snaky_attrib_list',['../d9/dbf/structsnaky__attrib__list.html',1,'']]],
   ['snaky_5fattrib_5fmap_3',['snaky_attrib_map',['../d3/dea/structsnaky__attrib__map.html',1,'']]],
-  ['snaky_5fstring_4',['snaky_string',['../da/d8e/structsnaky__string.html',1,'']]]
+  ['snaky_5fobj_5ffield_4',['snaky_obj_field',['../d6/d54/structsnaky__obj__field.html',1,'']]],
+  ['snaky_5fstring_5',['snaky_string',['../da/d8e/structsnaky__string.html',1,'']]]
 ];

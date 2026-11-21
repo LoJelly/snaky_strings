@@ -678,6 +678,9 @@ static int resolve_data_type(const char *start, size_t *out_jump, snaky_attrib_i
 
 static void trim_trailing_whitespace_from_value(snaky_string *sbuffer, char *buffer)
 {
+	if(!sbuffer && !buffer)
+		return;
+
 	// only trim trailing whitespace when the value is not a string (example of a string: "..., str = "some string!!    ""):
 	char *buf = sbuffer ? sbuffer->data : buffer;
 	char *end_of_buf = buf + strlen(buf) - 1;
@@ -1084,174 +1087,157 @@ static int parse_dimensions(const char *str_origin, const char *attrib_name, siz
 	// max_depth tracks the most amount of nested arrays currently found
 	size_t max_depth = 0;
 
-	const char *array_start = NULL;
-	for(const char *p = str_origin; *p; ++p)
+	// move to the array in the string (first resolve the actual attribute name)
+	snaky_attrib_info array_info = {0};
+	char attrib[SNAKY_BUF_SIZE] = {0};
+	char actual_attrib_name[attrib_name_len + 1];
+	snprintf(actual_attrib_name, attrib_name_len, "%s", attrib_name);
+	snaky_parse_target_attrib_buf(str_origin, actual_attrib_name, attrib, sizeof(attrib), &array_info);
+
+	const char *array_start = array_info.name_start_pos;
+	const char *p = array_start;
+	while(*p && *p != ARR_OPENING)
+		p++;
+	skip_whitespace(&p, NULL);
+
+	// parse dimensions and commas:
+	while(*p)
 	{
-		// find the name of the array
-		//if(strncmp(p, attrib_name, attrib_name_len) == 0)
-		if(match_word(&p, attrib_name, attrib_name_len))
+		skip_whitespace(&p, NULL);
+
+		if(!*p)
 		{
-			array_start = p;
-
-			// jump to end of array name
-			p += attrib_name_len;
-
-			skip_whitespace(&p, NULL);
-
-			// move until the first '[' is found
-			while(*p && *p != ARR_OPENING)
-				p++;
-
-			skip_whitespace(&p, NULL);
-
-			// now p should point to the first '['
-			if(!*p)
-			{
-				vl_log(VL_ERROR, "Expected '%c' in array: '%s'!\n", ARR_OPENING, array_start);
-				return 0;
-			}
-
-			// parse dimensions and commas:
-			while(*p)
-			{
-				skip_whitespace(&p, NULL);
-
-				if(!*p)
-				{
-					vl_log(VL_ERROR, "Unexpected termination of array string: '%s'!\n", array_start);
-					return 0;
-				}
-
-				// when a new array is opened:
-				if(*p == ARR_OPENING)
-				{
-					// make sure the max amount of dimensions is not crossed
-					if(depth >= SNAKY_MAX_ARR_DIMENSIONS)
-					{
-						vl_log(VL_ERROR, "Max number of array dimensions reached: '%s'!\n", array_start);
-						return 0;
-					}
-
-					// when depth is at least 1, this array has elements
-					if(depth > 0)
-						has_elements[depth - 1] = 1;
-
-					// reset counts and statuses for the new array
-					comma_counts[depth] = 0;
-					has_elements[depth] = 0;
-
-					// a new array means depth must be incremented
-					depth++;
-
-					// if max depth is reached, make that depth the new max depth
-					if(depth > max_depth)
-						max_depth = depth;
-
-					p++;
-					continue;
-				}
-
-				// when a comma is encountered:
-				if(*p == ARR_ELEM_DELIM)
-				{
-					// if no arrays have been found yet, error out
-					if(depth == 0)
-					{
-						vl_log(VL_ERROR, "Empty array encountered: '%s'!\n", array_start);
-						return 0;
-					}
-
-					// the array at this depth gains a comma count
-					comma_counts[depth - 1]++;
-
-					p++;
-
-					// if multiple commas are found, error out (every index must have a valid element)
-					skip_whitespace(&p, NULL);
-					if(*p == ARR_ELEM_DELIM)
-					{
-						vl_log(VL_ERROR, "Empty element encountered: '%s'!\n", array_start);
-						return 0;
-					}
-					continue;
-				}
-
-				// when a ']' is encountered:
-				if(*p == ARR_CLOSING)
-				{
-					// if no arrays have been found yet, error out
-					if(depth == 0)
-					{
-						vl_log(VL_ERROR, "Empty array encountered: '%s'!\n", array_start);
-						return 0;
-					}
-
-					// go back one level
-					depth--;
-
-					// count amount of elements in the array just parsed:
-					size_t elem_count = 0;
-
-					// if it had any elements:
-					if(has_elements[depth])
-						// the amount of elements is the amount of commas + 1
-						elem_count = comma_counts[depth] + 1;
-
-					if(dimension_seen[depth])
-					{
-						// enforce that every array has the same amount of elements:
-						if(dimension_counts[depth] != elem_count)
-						{
-							vl_log(VL_ERROR, "Array size does not match other dimensions: '%s'!\n", array_start);
-							return 0;
-						}
-					}
-					else
-					{
-						// save this dimension info for the parsed nested array
-						dimension_counts[depth] = elem_count;
-						dimension_seen[depth] = 1;
-					}
-
-					p++;
-
-					// at the end of parsing, depth of 0 means all arrays were successfully parsed
-					if(depth == 0)
-					{
-						// now copy the dimensions info into the output args:
-						for(size_t i = 0; i < max_depth; ++i)
-							out_dimensions[i] = dimension_counts[i];
-
-						*out_num_dimensions = max_depth;
-
-						return 1;
-					}
-
-					continue;
-				}
-
-				// on any other character, a depth of 0 means an element was encountered
-				if(depth == 0)
-					return 0;
-
-				has_elements[depth - 1] = 1;
-
-				p++;
-			}
-
 			vl_log(VL_ERROR, "Unexpected termination of array string: '%s'!\n", array_start);
 			return 0;
 		}
+
+		// when a new array is opened:
+		if(*p == ARR_OPENING)
+		{
+			// make sure the max amount of dimensions is not crossed
+			if(depth >= SNAKY_MAX_ARR_DIMENSIONS)
+			{
+				vl_log(VL_ERROR, "Max number of array dimensions reached: '%s'!\n", array_start);
+				return 0;
+			}
+
+			// when depth is at least 1, this array has elements
+			if(depth > 0)
+				has_elements[depth - 1] = 1;
+
+			// reset counts and statuses for the new array
+			comma_counts[depth] = 0;
+			has_elements[depth] = 0;
+
+			// a new array means depth must be incremented
+			depth++;
+
+			// if max depth is reached, make that depth the new max depth
+			if(depth > max_depth)
+				max_depth = depth;
+
+			p++;
+			continue;
+		}
+
+		// when a comma is encountered:
+		if(*p == ARR_ELEM_DELIM)
+		{
+			// if no arrays have been found yet, error out
+			if(depth == 0)
+			{
+				vl_log(VL_ERROR, "Empty array encountered: '%s'!\n", array_start);
+				return 0;
+			}
+
+			// the array at this depth gains a comma count
+			comma_counts[depth - 1]++;
+
+			p++;
+
+			// if multiple commas are found, error out (every index must have a valid element)
+			skip_whitespace(&p, NULL);
+			if(*p == ARR_ELEM_DELIM)
+			{
+				vl_log(VL_ERROR, "Empty element encountered: '%s'!\n", array_start);
+				return 0;
+			}
+			continue;
+		}
+
+		// when a ']' is encountered:
+		if(*p == ARR_CLOSING)
+		{
+			// if no arrays have been found yet, error out
+			if(depth == 0)
+			{
+				vl_log(VL_ERROR, "Empty array encountered: '%s'!\n", array_start);
+				return 0;
+			}
+
+			// go back one level
+			depth--;
+
+			// count amount of elements in the array just parsed:
+			size_t elem_count = 0;
+
+			// if it had any elements:
+			if(has_elements[depth])
+				// the amount of elements is the amount of commas + 1
+				elem_count = comma_counts[depth] + 1;
+
+			if(dimension_seen[depth])
+			{
+				// enforce that every array has the same amount of elements:
+				if(dimension_counts[depth] != elem_count)
+				{
+					vl_log(VL_ERROR, "Array size does not match other dimensions: '%s'!\n", array_start);
+					return 0;
+				}
+			}
+			else
+			{
+				// save this dimension info for the parsed nested array
+				dimension_counts[depth] = elem_count;
+				dimension_seen[depth] = 1;
+			}
+
+			p++;
+
+			// at the end of parsing, depth of 0 means all arrays were successfully parsed
+			if(depth == 0)
+			{
+				// now copy the dimensions info into the output args:
+				for(size_t i = 0; i < max_depth; ++i)
+					out_dimensions[i] = dimension_counts[i];
+
+				*out_num_dimensions = max_depth;
+
+				return 1;
+			}
+
+			continue;
+		}
+
+		// on any other character, a depth of 0 means an element was encountered
+		if(depth == 0)
+			return 0;
+
+		has_elements[depth - 1] = 1;
+
+		p++;
 	}
 
-	if(array_start)
+	if(!*p)
 		vl_log(VL_ERROR, "Failed to parse dimensions in array: '%s'!\n", array_start);
+
 	return 0;
 }
-static size_t parse_index(const char *str_origin, const char **index_values, size_t num_indices, size_t *dimensions, size_t num_dimensions, int *out_success, char *out_error_msg_buf, size_t out_error_msg_buf_size)
+// turn a multidimensional index into a linear index
+static int get_linear_index(const char *str_origin, const char **index_values, size_t num_indices, size_t *dimensions, size_t num_dimensions, size_t *out_index, char *out_error_msg_buf, size_t out_error_msg_buf_size)
 {
-	// default to failure status
-	*out_success = 0;
+	// default to index 0
+	*out_index = 0;
 
 	// make sure invalid array elements won't be read later
 	if(num_indices == 0 || num_indices > num_dimensions)
@@ -1264,8 +1250,8 @@ static size_t parse_index(const char *str_origin, const char **index_values, siz
 	size_t final_index = 0;
 	for(size_t i = 0; i < num_indices; ++i)
 	{
-		int idx = snaky_parse_int(str_origin, index_values[i], out_success);
-		if(*out_success == 0)
+		int idx = 0;
+		if(!snaky_parse_int(str_origin, index_values[i], &idx))
 		{
 			snprintf(out_error_msg_buf, out_error_msg_buf_size, "failed to convert '%s' to an integer", index_values[i]);
 			return 0;
@@ -1273,21 +1259,18 @@ static size_t parse_index(const char *str_origin, const char **index_values, siz
 
 		if(idx < 0 || (size_t) idx >= dimensions[i])
 		{
-			*out_success = 0;
 			snprintf(out_error_msg_buf, out_error_msg_buf_size, "index '%s' is out of bounds", index_values[i]);
 			return 0;
 		}
 
 		if(dimensions[i] == 0)
 		{
-			*out_success = 0;
 			snprintf(out_error_msg_buf, out_error_msg_buf_size, "invalid dimension count");
 			return 0;
 		}
 
 		if(final_index > (SIZE_MAX - (size_t) idx) / dimensions[i])
 		{
-			*out_success = 0;
 			snprintf(out_error_msg_buf, out_error_msg_buf_size, "resolved index exceeds SIZE_MAX");
 			return 0;
 		}
@@ -1295,8 +1278,41 @@ static size_t parse_index(const char *str_origin, const char **index_values, siz
 		final_index = final_index * dimensions[i] + (size_t) idx;
 	}
 
-	*out_success = 1;
-	return final_index;
+	*out_index = final_index;
+	return 1;
+}
+// turn a linear index into a multidimensional index
+static int get_multidimensional_index(const char *str_origin, size_t index, size_t *dimensions, size_t num_dimensions, char *out_result, size_t out_result_size, char *out_error_msg_buf, size_t out_error_msg_buf_size)
+{
+	if(num_dimensions == 0 || !dimensions)
+	{
+		vl_log(VL_ERROR, "Failed to parse linear index: invalid dimensions!\n");
+		out_result[0] = '\0';
+		return 0;
+	}
+
+	size_t indices[SNAKY_MAX_ARR_DIMENSIONS] = {0};
+	size_t final_index = index;
+
+	for(size_t d = num_dimensions; d > 0; --d)
+	{
+		size_t dim_size = dimensions[d - 1];
+		if(dim_size == 0)
+		{
+			vl_log(VL_ERROR, "Dimension size cannot be 0!\n");
+			return 0;
+		}
+
+		indices[d - 1] = final_index % dim_size;
+		final_index /= dim_size;
+	}
+
+	size_t pos = 0;
+	out_result[0] = '\0';
+	for(size_t d = 0; d < num_dimensions && pos < out_result_size; ++d)
+		pos += (size_t) snprintf(out_result + pos, out_result_size - pos, "[%zu]", indices[d]);
+
+	return 1;
 }
 static int parse_array(const char *const str_origin, const char *const array, snaky_string *sbuffer, char *buffer, size_t buffer_size, snaky_attrib_info *out_info)
 {
@@ -1345,10 +1361,9 @@ static int parse_array(const char *const str_origin, const char *const array, sn
 		if(!parse_dimensions(str_origin, array, actual_array_len, dimensions, &num_dimensions))
 			return 0;
 
-		int s = 0;
 		char error_msg_buf[SNAKY_BUF_SIZE] = {0};
-		int index = parse_index(str_origin, index_values_ptr, num_indices, dimensions, num_dimensions, &s, error_msg_buf, sizeof(error_msg_buf));
-		if(s == 0)
+		size_t index = 0;
+		if(!get_linear_index(str_origin, index_values_ptr, num_indices, dimensions, num_dimensions, &index, error_msg_buf, sizeof(error_msg_buf)))
 		{
 			vl_log(VL_ERROR, "Failed to parse index: %s for array '%s'!\n", error_msg_buf, array);
 			return 0;
@@ -1384,9 +1399,7 @@ static int parse_array(const char *const str_origin, const char *const array, sn
 				int real_indices[num_indices];
 				for(size_t i = 0; i < num_indices; ++i)
 				{
-					int s = 0;
-					real_indices[i] = snaky_parse_int(str_origin, index_values[i], &s);
-					if(s == 0 || real_indices[i] < 0)
+					if(!snaky_parse_int(str_origin, index_values[i], &real_indices[i]) || real_indices[i] < 0)
 					{
 						vl_log(VL_ERROR, "Failed to parse index: '%s'!\n", index_values[i]);
 						return 0;
@@ -1571,11 +1584,6 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 					}
 					// add one to go back to the first char in the attrib name
 					p++;
-
-					obtain_total_attrib_len(p, out_info);
-					resolve_data_type(p, NULL, out_info);
-					if(out_info)
-						out_info->name_start_pos = p;
 				}
 				else if(strcmp(chained_attrib, PARENT_KEYWORD) == 0)
 				{
@@ -1614,12 +1622,13 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 					}
 					// add one to go back to the first char in the parent name
 					p++;
-
-					obtain_total_attrib_len(p, out_info);
-					resolve_data_type(p, NULL, out_info);
-					if(out_info)
-						out_info->name_start_pos = p;
 				}
+
+				// obtain attrib info:
+				obtain_total_attrib_len(p, out_info);
+				resolve_data_type(p, NULL, out_info);
+				if(out_info)
+					out_info->name_start_pos = p;
 
 				// move to next chained attrib in the list of chained attribs
 				curr_chained_attrib++;
@@ -2675,57 +2684,57 @@ int snaky_destroy_attrib_list(snaky_attrib_list *list)
 	return 1;
 }
 
-char snaky_parse_char(const char *str, int *out_success)
+int snaky_parse_char(const char *str, char *out_value)
 {
 	// default to 0
-	if(out_success)
-		*out_success = 0;
+	if(out_value)
+		*out_value = '\0';;
 
 	if(!str || strlen(str) != 1)
-		return '\0';
+		return 0;
 
 	char c = *str;
 
-	if(out_success)
-		*out_success = 1;
+	if(out_value)
+		*out_value = c;
 
-	return c;
+	return 1;
 }
-bool snaky_parse_bool(const char *str, int *out_success)
+int snaky_parse_bool(const char *str, bool *out_value)
 {
 	// default to 0
-	if(out_success)
-		*out_success = 0;
+	if(out_value)
+		*out_value = 0;
 
 	if(!str || strlen(str) == 0)
-		return false;
+		return 0;
 
 	if(strncmp(str, "TRUE", 4) == 0 || strncmp(str, "ON", 2) == 0)
 	{
-		if(out_success)
-			*out_success = 1;
-		return true;
+		if(out_value)
+			*out_value = 1;
+		return 1;
 	}
 	else if(strncmp(str, "FALSE", 5) == 0 || strncmp(str, "OFF", 3) == 0)
 	{
-		if(out_success)
-			*out_success = 1;
-		return false;
+		if(out_value)
+			*out_value = 0;
+		return 1;
 	}
 	else if(strncmp(str, "1", 1) == 0)
 	{
-		if(out_success)
-			*out_success = 1;
-		return true;
+		if(out_value)
+			*out_value = 1;
+		return 1;
 	}
 	else if(strncmp(str, "0", 1) == 0)
 	{
-		if(out_success)
-			*out_success = 1;
-		return false;
+		if(out_value)
+			*out_value = 0;
+		return 1;
 	}
-	else
-		return false;
+
+	return 0;
 }
 
 // returns the current char the pointer is on
@@ -2740,15 +2749,12 @@ static char get_next_char(const char **str)
 	skip_whitespace(str, NULL);
 	return *(*str)++;
 }
-static float parse_term(const char*, const char**, int*);
-static float parse_bitwise(const char *origin, const char **str, int *out_success)
+static int parse_term(const char*, const char**, float*);
+static int parse_bitwise(const char *origin, const char **str, float *out_result)
 {
-	int s = 0;
 	// parse the first term
-	float f = parse_term(origin, str, &s);
-	*out_success = s;
-	if(s == 0)
-		return 0.0f;
+	if(!parse_term(origin, str, out_result))
+		return 0;
 
 	while(peek_next_char(str) == '|' || peek_next_char(str) == '&' || peek_next_char(str) == '^' ||
 			peek_next_char(str) == '<' || peek_next_char(str) == '>')
@@ -2766,12 +2772,11 @@ static float parse_bitwise(const char *origin, const char **str, int *out_succes
 			get_next_char(str);
 
 		// parse the second term
-		float next_val = parse_term(origin, str, &s);
-		*out_success = s;
-		if(s == 0)
-			return 0.0f;
+		float next_val = 0.0f;
+		if(!parse_term(origin, str, &next_val))
+			return 0;
 
-		int fi = (int) f;
+		int fi = (int) *out_result;
 		int next_val_i = (int) next_val;
 		// determine which operators to use
 		if(bitshift_len > 0)
@@ -2791,11 +2796,10 @@ static float parse_bitwise(const char *origin, const char **str, int *out_succes
 				fi ^= next_val_i;
 		}
 
-		f = fi;
-		*out_success = 1;
+		*out_result = fi;
 	}
 
-	return f;
+	return 1;
 }
 /*
    the first function call for an expression:
@@ -2807,37 +2811,35 @@ static float parse_bitwise(const char *origin, const char **str, int *out_succes
    term,
    factor
 */
-static float parse_expression(const char *origin, const char **str, int *out_success)
+static int parse_expression(const char *origin, const char **str, float *out_result)
 {
-	int s = 0;
-	// tries to parse a bitwise operation which is made up of terms
-	float f = parse_bitwise(origin, str, &s);
-	*out_success = s;
-	if(s == 0)
-		return 0.0f;
+	// move one level up in precedence (then parse_bitwise(...) moves up another level, and so on)
+	if(!parse_bitwise(origin, str, out_result))
+		return 0;
+
 	// after parsing the first term, check for lowest precedence operators like + and -
 	while(peek_next_char(str) == '+' || peek_next_char(str) == '-')
 	{
 		char op = get_next_char(str);
 
 		// parse second term and calculate result
-		float next_val = parse_bitwise(origin, str, &s);
-		*out_success = s;
-		if(s == 0)
-			return 0.0f;
+		float next_val = 0.0f;
+		if(!parse_bitwise(origin, str, &next_val))
+			return 0;
+
 		if(op == '+')
-			f += next_val;
+			*out_result += next_val;
 		else
-			f -= next_val;
+			*out_result -= next_val;
 	}
-	return f;
+
+	return 1;
 }
-static float parse_factor(const char *origin, const char **str, int *out_success)
+static int parse_factor(const char *origin, const char **str, float *out_result)
 {
-	// skip any string chars, '{' and whitespace
+	// skip any strings and whitespace
 	if(snaky_is_string(*str))
 	{
-		// skip the '{'
 		*str += 1;
 		skip_whitespace(str, NULL);
 	}
@@ -2847,16 +2849,14 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 	if(c == EXPR_OPENING)
 	{
 		char next = get_next_char(str);
-		int s = 0;
-		float f = parse_expression(origin, str, &s);
-		*out_success = s;
-		if(s == 0)
-			return 0.0f;
+
+		if(!parse_expression(origin, str, out_result))
+			return 0;
+
 		if(peek_next_char(str) == EXPR_CLOSING)
 		{
 			get_next_char(str);
-			*out_success = 1;
-			return f;
+			return 1;
 		}
 		else
 			return 0.0f;
@@ -2868,13 +2868,10 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 		char *end = NULL;
 		float f = strtof(*str, &end);
 		if(end == *str)
-		{
-			*out_success = 0;
-			return 0.0f;
-		}
+			return 0;
 		*str = end;
-		*out_success = 1;
-		return f;
+		*out_result = f;
+		return 1;
 	}
 
 	// see if user provided a function or attrib name
@@ -2893,8 +2890,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 			if(i == 0 && isdigit(**str))
 			{
 				vl_log(VL_ERROR, "The first character in a function or attribute cannot be a digit!\n");
-				*out_success = 0;
-				return 0.0f;
+				return 0;
 			}
 
 			// stop searching for just letters when an array index starts
@@ -2924,27 +2920,22 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 			if(info.data_type == SNAKY_ARRAY)
 			{
 				vl_log(VL_ERROR, "The parsed attribute '%s' is an array, cannot parse a value!\n", attrib_name);
-				*out_success = 0;
-				return 0.0f;
+				return 0;
 			}
 			else if(info.data_type == SNAKY_STRING)
 			{
 				vl_log(VL_ERROR, "The parsed attribute '%s' is a string, cannot parse a value!\n", attrib_name);
-				*out_success = 0;
-				return 0.0f;
+				return 0;
 			}
 			else if(info.data_type == SNAKY_ATTRIB_STRING)
 			{
 				vl_log(VL_ERROR, "The parsed attribute '%s' is an attribute string, cannot parse a value!\n", attrib_name);
-				*out_success = 0;
-				return 0.0f;
+				return 0;
 			}
 
 			float f = 0.0f;
-			int s = 0;
-			snaky_parse_value(origin, attrib, SNAKY_FLOAT, &f, &s);
-			*out_success = s;
-			if(s == 1)
+			int success = snaky_parse_value(origin, attrib, SNAKY_FLOAT, &f);
+			if(success)
 				return f;
 		}
 
@@ -2953,8 +2944,8 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 		{
 			if(strcmp(attrib_name, constants.keys[i]) == 0)
 			{
-				*out_success = 1;
-				return constants.values[i];
+				*out_result = constants.values[i];
+				return 1;
 			}
 		}
 
@@ -2966,16 +2957,15 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 				if(peek_next_char(str) == EXPR_OPENING)
 				{
 					char next = get_next_char(str);
-					int s = 0;
-					float f = parse_expression(origin, str, &s);
-					*out_success = s;
-					if(s == 0)
-						return 0.0f;
+
+					if(!parse_expression(origin, str, out_result))
+						return 0;
+
 					if(peek_next_char(str) == EXPR_CLOSING)
 					{
 						get_next_char(str);
-						*out_success = 1;
-						return eval_functions.values[i](f);
+						*out_result = eval_functions.values[i](*out_result);
+						return 1;
 					}
 					else
 					{
@@ -3009,8 +2999,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 					if(!end_paren)
 					{
 						vl_log(VL_ERROR, "Expected matching ')' in string: '%s'!\n", start_paren);
-						*out_success = 0;
-						return 0.0f;
+						return 0;
 					}
 
 					// move str to the next ')', while adding to fn_arg buffer
@@ -3056,7 +3045,6 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 					if(peek_next_char(str) == EXPR_CLOSING)
 					{
 						get_next_char(str);
-						*out_success = 1;
 
 						// parse func data
 						function func_data = functions.values[i];
@@ -3065,8 +3053,7 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 						if(num_args != func_data.num_args)
 						{
 							vl_log(VL_ERROR, "The function '%s' expects %zu arguments but received %zu!\n", functions.keys[i], func_data.num_args, num_args);
-							*out_success = 0;
-							return 0.0f;
+							return 0;
 						}
 
 						// convert fn_args to a const char* array
@@ -3080,13 +3067,10 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 						float floats[num_args];
 						for(size_t i = 0; i < num_args; ++i)
 						{
-							int s = 0;
-							floats[i] = parse_expression(origin, &fn_args_ptr[i], &s);
-							if(s == 0)
+							if(!parse_expression(origin, &fn_args_ptr[i], &floats[i]))
 							{
 								vl_log(VL_ERROR, "Failed to parse value in string: '%s'!\n", fn_args_ptr[i]);
-								*out_success = 0;
-								return 0.0f;
+								return 0;
 							}
 						}
 
@@ -3119,7 +3103,6 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 							}
 							default:
 								vl_log(VL_ERROR, "Invalid return type of function: %d!\n", func_data.return_type);
-								*out_success = 0;
 								return 0;
 						}
 					}
@@ -3133,29 +3116,24 @@ static float parse_factor(const char *origin, const char **str, int *out_success
 		}
 	}
 
-	*out_success = 0;
-	return 0.0f;
+	return 0;
 }
-static float parse_term(const char *origin, const char **str, int *out_success)
+static int parse_term(const char *origin, const char **str, float *out_result)
 {
-	int s = 0;
-	// tries to parse a single factor
-	float f = parse_factor(origin, str, &s);
-	*out_success = s;
-	if(s == 0)
-		return 0.0f;
+	if(!parse_factor(origin, str, out_result))
+		return 0;
 
 	while(peek_next_char(str) == '*' || peek_next_char(str) == '/' || peek_next_char(str) == '%')
 	{
 		char op = get_next_char(str);
 
 		// parse the second factor
-		float next_val = parse_factor(origin, str, &s);
-		*out_success = s;
-		if(s == 0)
-			return 0.0f;
+		float next_val = 0.0f;
+		if(!parse_factor(origin, str, &next_val))
+			return 0;
+
 		if(op == '*')
-			f *= next_val;
+			*out_result *= next_val;
 		else if(op == '/')
 		{
 			if(next_val == 0)
@@ -3163,215 +3141,169 @@ static float parse_term(const char *origin, const char **str, int *out_success)
 				vl_log(VL_WARNING, "Dividing by 0 is undefined. Returning 0.0f.\n");
 				return 0.0f;
 			}
-			f /= next_val;
+			*out_result /= next_val;
 		}
 		else if(op == '%')
 		{
-			int fi = (int) f;
+			int fi = (int) *out_result;
 			fi %= (int) next_val;
-			f = fi;
+			*out_result = fi;
 		}
-
-		*out_success = 1;
 	}
 
-	return f;
+	return 1;
 }
-int snaky_parse_int(const char *origin, const char *str, int *out_success)
+int snaky_parse_int(const char *origin, const char *str, int *out_value)
 {
 	// default to 0
-	if(out_success)
-		*out_success = 0;
+	if(out_value)
+		*out_value = 0;
 
 	if(!str || strlen(str) == 0)
 		return 0;
 
-	int s = 0;
-	float ff = parse_expression(origin, &str, &s);
-	if(s == 1)
+	float ff = 0.0f;
+	if(parse_expression(origin, &str, &ff))
 	{
-		if(out_success)
-			*out_success = 1;
-		return ff;
+		if(out_value)
+			*out_value = ff;
+		return 1;
 	}
 
 	char *endptr = NULL;
 	int i = strtol(str, &endptr, 10);
 	if(endptr != str)
 	{
-		if(out_success)
-			*out_success = 1;
-		return i;
+		if(out_value)
+			*out_value = i;
+		return 1;
 	}
 
 	return 0;
 }
-float snaky_parse_float(const char *origin, const char *str, int *out_success)
+int snaky_parse_float(const char *origin, const char *str, float *out_value)
 {
 	// default to 0
-	if(out_success)
-		*out_success = 0;
+	if(out_value)
+		*out_value = 0.0f;
 
 	if(!str || strlen(str) == 0)
-		return 0.0f;
+		return 0;
 
-	int s = 0;
-	float ff = parse_expression(origin, &str, &s);
-	if(s == 1)
+	float ff = 0.0f;
+	if(parse_expression(origin, &str, &ff))
 	{
-		if(out_success)
-			*out_success = 1;
-		return ff;
+		if(out_value)
+			*out_value = ff;
+		return 1;
 	}
 
 	char *endptr = NULL;
-	float f = strtof(str, &endptr);
+	ff = strtof(str, &endptr);
 	if(endptr != str)
 	{
-		if(out_success)
-			*out_success = 1;
-		return f;
+		if(out_value)
+			*out_value = ff;
+		return 1;
 	}
 
-	return 0.0f;
+	return 0;
 }
-double snaky_parse_double(const char *origin, const char *str, int *out_success)
+int snaky_parse_double(const char *origin, const char *str, double *out_value)
 {
 	// default to 0
-	if(out_success)
-		*out_success = 0;
+	if(out_value)
+		*out_value = 0;
 
 	if(!str || strlen(str) == 0)
-		return 0.0;
+		return 0;
 
-	int s = 0;
-	float ff = parse_expression(origin, &str, &s);
-	if(s == 1)
+	float ff = 0.0f;
+	if(parse_expression(origin, &str, &ff))
 	{
-		if(out_success)
-			*out_success = 1;
-		return ff;
+		if(out_value)
+			*out_value = (double) ff;
+		return 1;
 	}
 
 	char *endptr = NULL;
 	double d = strtod(str, &endptr);
 	if(endptr != str)
 	{
-		if(out_success)
-			*out_success = 1;
-		return d;
+		if(out_value)
+			*out_value = d;
+		return 1;
 	}
 
-	return 0.0;
+	return 0;
 }
-void snaky_parse_value(const char *origin, const char *str, snaky_data_type target_type, void *out_value, int *out_success)
+int snaky_parse_value(const char *origin, const char *str, snaky_data_type target_type, void *out_value)
 {
-	if(!out_success)
-	{
-		vl_log(VL_ERROR, "snaky_parse_value(...) requires 'out_success' to be a valid pointer!\n");
-		return;
-	}
+	int success = 0;
 
-	// make sure it's 0 by default
-	*out_success = 0;
-
+	// TODO repeated logic here and in snaky_parse_object(...)
 	switch(target_type)
 	{
 		case SNAKY_CHAR:
-			char c = snaky_parse_char(str, out_success);
-			if(*out_success == 1 && out_value)
+			char c = '\0';
+			if((success = snaky_parse_char(str, &c)) && out_value)
 				*((char*) out_value) = c;
 			break;
 		case SNAKY_BOOL:
-			bool b = snaky_parse_bool(str, out_success);
-			if(*out_success == 1 && out_value)
+			bool b = 0;
+			if((success = snaky_parse_bool(str, &b)) && out_value)
 				*((bool*) out_value) = b;
 			break;
 		case SNAKY_INT:
-			int i = snaky_parse_int(origin, str, out_success);
-			if(*out_success == 1 && out_value)
+			int i = 0;
+			if((success = snaky_parse_int(origin, str, &i)) && out_value)
 				*((int*) out_value) = i;
 			break;
 		case SNAKY_FLOAT:
-			float f = snaky_parse_float(origin, str, out_success);
-			if(*out_success == 1 && out_value)
+			float f = 0.0f;
+			if((success = snaky_parse_float(origin, str, &f)) && out_value)
 				*((float*) out_value) = f;
 			break;
 		case SNAKY_DOUBLE:
-			double d = snaky_parse_double(origin, str, out_success);
-			if(*out_success == 1 && out_value)
+			double d = 0.0;
+			if((success = snaky_parse_double(origin, str, &d)) && out_value)
 				*((double*) out_value) = d;
 			break;
 		default:
 			vl_log(VL_ERROR, "Invalid data type in snaky_parse_value(...): %d\n", target_type);
-			break;
+			return 0;
 	}
 
-	if(*out_success == 0)
-		vl_log(VL_ERROR, "Failed to parse string value: '%s'!\n", str);
+	return success;
 }
-void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_attrib_info *out_info, int *out_success)
+int snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_attrib_info *out_info)
 {
-	if(!out_success)
-	{
-		vl_log(VL_ERROR, "snaky_parse_target_attrib_value(...) requires 'out_success' to be a valid pointer!\n");
-		return;
-	}
-
-	// make sure success status is 0 by default
-	*out_success = 0;
-
 	snaky_string attrib = {0};
 	if(!snaky_prepare_str(&attrib, SNAKY_BUF_SIZE))
-		return;
+		return 0;
 
+	int success = 0;
 	if(snaky_parse_target_attrib_str(str, attrib_name, &attrib, out_info))
-		snaky_parse_value(str, attrib.data, target_type, out_value, out_success);
+		success = snaky_parse_value(str, attrib.data, target_type, out_value);
 
 	snaky_free_str(&attrib);
 
-	if(*out_success == 0)
+	if(!success)
 		vl_log(VL_ERROR, "Failed to parse target attrib value: string: '%s', attribute name: '%s'!\n", str, attrib_name);
+
+	return success;
 }
-void snaky_parse_target_attrib_value_buf(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, char *buffer, size_t buffer_size, snaky_attrib_info *out_info, int *out_success)
+int snaky_parse_target_attrib_value_buf(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, char *buffer, size_t buffer_size, snaky_attrib_info *out_info)
 {
-	if(!out_success)
-	{
-		vl_log(VL_ERROR, "snaky_parse_target_attrib_value_buf(...) requires 'out_success' to be a valid pointer!\n");
-		return;
-	}
-
-	// make sure it is 0 by default
-	*out_success = 0;
-
 	if(snaky_parse_target_attrib_buf(str, attrib_name, buffer, buffer_size, out_info))
-		snaky_parse_value(str, buffer, out_info->data_type, out_value, out_success);
-
-	if(*out_success == 0)
-		vl_log(VL_ERROR, "Failed to parse target attrib value: string: '%s', attribute name: '%s'!\n", str, attrib_name);
+		return snaky_parse_value(str, buffer, out_info->data_type, out_value);
+	return 0;
 }
-void snaky_parse_target_attrib_value_str(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_string *buffer, snaky_attrib_info *out_info, int *out_success)
+int snaky_parse_target_attrib_value_str(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_string *buffer, snaky_attrib_info *out_info)
 {
-	if(!buffer || !buffer->data || buffer->len == 0 || buffer->size == 0)
-	{
-		vl_log(VL_ERROR, "Unable to parse target attribute value: invalid arguments given!\n");
-		return;
-	}
-
-	if(!out_success)
-	{
-		vl_log(VL_ERROR, "snaky_parse_target_attrib_value_str(...) requires 'out_success' to be a valid pointer!\n");
-		return;
-	}
-
-	// make sure it is 0 by default
-	*out_success = 0;
-
 	if(snaky_parse_target_attrib_str(str, attrib_name, buffer, out_info))
-		snaky_parse_value(str, buffer->data, out_info->data_type, out_value, out_success);
-
-	if(*out_success == 0)
-		vl_log(VL_ERROR, "Failed to parse target attrib value: string: '%s', attribute name: '%s'!\n", str, attrib_name);
+		return snaky_parse_value(str, buffer->data, out_info->data_type, out_value);
+	return 0;
 }
 int snaky_parse_data_type(snaky_data_type data_type, char *buffer, size_t buffer_size)
 {
@@ -3408,6 +3340,107 @@ int snaky_parse_data_type(snaky_data_type data_type, char *buffer, size_t buffer
 			vl_log(VL_ERROR, "Unknown data type: %d!\n", data_type);
 			snprintf(buffer, buffer_size, "NULL");
 			return 0;
+	}
+
+	return 1;
+}
+
+int snaky_parse_object(const char *str, void *target_struct, snaky_obj_field *fields, size_t num_fields)
+{
+	if(!str || strlen(str) == 0 || !target_struct || !fields || num_fields == 0)
+		return 0;
+
+	char target_attrib_buf[SNAKY_BUF_SIZE * 2] = {0};
+	char buf[SNAKY_BUF_SIZE] = {0};
+
+	// iterate over list of fields:
+	for(size_t num_field = 0; num_field < num_fields; ++num_field)
+	{
+		snaky_obj_field *field = &fields[num_field];
+
+		if(field->size == 0)
+		{
+			vl_log(VL_ERROR, "The 'size' value on a snaky_obj_field struct cannot be 0!\n");
+			return 0;
+		}
+
+		// if the field's count is 0, set to 1 as default
+		if(field->count == 0)
+			field->count = 1;
+
+		// num_elem is the n-th elem within the field (always 1 for single-value fields)
+		for(size_t num_elem = 0; num_elem < field->count; ++num_elem)
+		{
+			const char *query = field->target_attrib;
+
+			// see if the field is an array
+			if(field->count > 1)
+			{
+				// if so, append the array index to the target attribute so it will be properly parsed
+
+				// but first convert the linear index into a multidimensional index
+				char result_index[SNAKY_BUF_SIZE] = {0};
+				size_t dimensions[SNAKY_MAX_ARR_DIMENSIONS] = {0};
+				size_t num_dimensions = 0;
+				if(!parse_dimensions(str, query, strlen(query), dimensions, &num_dimensions))
+					return 0;
+				if(!get_multidimensional_index(str, num_elem, dimensions, num_dimensions, result_index, sizeof(result_index), NULL, 0))
+					return 0;
+
+				// insert the indices at end of the target attribute name
+				snprintf(target_attrib_buf, sizeof(target_attrib_buf), "%s%s", field->target_attrib, result_index);
+				query = target_attrib_buf;
+			}
+
+			int found = snaky_parse_target_attrib_buf(str, query, buf, sizeof(buf), NULL);
+
+			void *value = ((char*) target_struct) + field->offset + (num_elem * field->size);
+			int success = 0;
+
+			// TODO make this repeated block a macro or function? (repeated logic in snaky_parse_value(...))
+			switch(field->data_type)
+			{
+				case SNAKY_CHAR:
+					char c = '\0';
+					if((success = snaky_parse_char(buf, &c)))
+						*((char*) value) = c;
+					break;
+				case SNAKY_BOOL:
+					bool b = 0;
+					if((success = snaky_parse_bool(buf, &b)))
+						*((bool*) value) = b;
+					break;
+				case SNAKY_INT:
+					int i = 0;
+					if((success = snaky_parse_int(str, buf, &i)))
+						*((int*) value) = i;
+					break;
+				case SNAKY_FLOAT:
+					float f = 0.0f;
+					if((success = snaky_parse_float(str, buf, &f)))
+						*((float*) value) = f;
+					break;
+				case SNAKY_DOUBLE:
+					double d = 0.0;
+					if((success = snaky_parse_double(str, buf, &d)))
+						*((double*) value) = d;
+					break;
+				case SNAKY_STRING:
+					strncpy((char*) value, buf, field->size - 1);
+					((char*) value)[field->size - 1] = '\0';
+					success = 1;
+					break;
+				default:
+					vl_log(VL_ERROR, "Invalid data type in snaky_parse_attribs_fields(...): %d\n", field->data_type);
+					return 0;
+			}
+
+			if(!success)
+			{
+				vl_log(VL_ERROR, "Failed to parse value: '%s' into the data type: %d!\n", buf, field->data_type);
+				return 0;
+			}
+		}
 	}
 
 	return 1;

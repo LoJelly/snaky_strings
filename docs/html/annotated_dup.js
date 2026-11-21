@@ -4,5 +4,6 @@ var annotated_dup =
     [ "snaky_attrib_info", "d3/dde/structsnaky__attrib__info.html", "d3/dde/structsnaky__attrib__info" ],
     [ "snaky_attrib_list", "d9/dbf/structsnaky__attrib__list.html", "d9/dbf/structsnaky__attrib__list" ],
     [ "snaky_attrib_map", "d3/dea/structsnaky__attrib__map.html", "d3/dea/structsnaky__attrib__map" ],
+    [ "snaky_obj_field", "d6/d54/structsnaky__obj__field.html", "d6/d54/structsnaky__obj__field" ],
     [ "snaky_string", "da/d8e/structsnaky__string.html", "da/d8e/structsnaky__string" ]
 ];

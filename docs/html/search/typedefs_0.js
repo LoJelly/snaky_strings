@@ -7,5 +7,6 @@ var searchData=
   ['snaky_5fdata_5ftype_4',['snaky_data_type',['../da/dd1/snaky__strings_8h.html#a2ac7e0d86b2498cb4db355efe68b4061',1,'snaky_strings.h']]],
   ['snaky_5feval_5ffunc_5',['snaky_eval_func',['../da/dd1/snaky__strings_8h.html#ad1b985017dadd4914cb90cb1873cfc5b',1,'snaky_strings.h']]],
   ['snaky_5ffwrite_5fmode_6',['snaky_fwrite_mode',['../da/dd1/snaky__strings_8h.html#a470b3118fd7f37a380bcbc16bdba639e',1,'snaky_strings.h']]],
-  ['snaky_5fstring_7',['snaky_string',['../da/dd1/snaky__strings_8h.html#a0a845ed78a212be7645296168076dc10',1,'snaky_strings.h']]]
+  ['snaky_5fobj_5ffield_7',['snaky_obj_field',['../da/dd1/snaky__strings_8h.html#a8701e211b154d80c12302e43657d35be',1,'snaky_strings.h']]],
+  ['snaky_5fstring_8',['snaky_string',['../da/dd1/snaky__strings_8h.html#a0a845ed78a212be7645296168076dc10',1,'snaky_strings.h']]]
 ];

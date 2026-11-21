@@ -276,6 +276,49 @@ typedef struct snaky_attrib_info
 } snaky_attrib_info;
 
 /**
+  Represents a single field within a struct/object.
+*/
+typedef struct snaky_obj_field
+{
+	/**
+	  The attribute in the original attribute string to target.
+	*/
+	const char *target_attrib;
+	/**
+	  The offset in the struct where the
+	  matching value is found.
+	*/
+	size_t offset;
+	/**
+	  The size of a single element within the
+	  field.
+	*/
+	size_t size;
+	/**
+	  The number of elements within the field.
+	  If the field is a single value, then this
+	  should be 1. If the field is an array, then
+	  this should be equal to the total number of
+	  elements within that array excluding nested
+	  arrays.
+
+	  @important If this value is 0 when the snaky_parse_object(...)
+	  function is called, it is automatically set to 1 by default.
+	*/
+	size_t count;
+	/**
+	  The data type of the attribute and value.
+
+	  @important Do not use SNAKY_ARRAY, even
+	  if the object's field is an array. The
+	  data type should always reflect the underlying
+	  type; so if it's an integer array, it should
+	  be SNAKY_INT.
+	*/
+	snaky_data_type data_type;
+} snaky_obj_field;
+
+/**
   Determines how data should be written to a file.
 */
 typedef enum snaky_fwrite_mode
@@ -693,11 +736,12 @@ SNAKY_API int snaky_destroy_attrib_list(snaky_attrib_list *list);
 
   @param str The string holding the character attribute value. This is
   not an attribute string.
-  @param out_success A pointer to an int that indicates whether or
-  not the function succeeded. It will be equal to 1 if it succeeded,
-  and 0 if it failed.
+  @param out_value A pointer to a char where the parsed value should
+  be placed.
+
+  @return 1 on success, 0 on failure.
 */
-SNAKY_API char snaky_parse_char(const char *str, int *out_success);
+SNAKY_API int snaky_parse_char(const char *str, char *out_value);
 /**
   Reads a boolean attribute value and obtains
   the actual bool equivalent of it.
@@ -709,11 +753,12 @@ SNAKY_API char snaky_parse_char(const char *str, int *out_success);
 
   @param str The string holding the boolean attribute value. This is not
   an attribute string.
-  @param out_success A pointer to an int that indicates whether
-  or not the function succeeded. It will be equal to 1 if it
-  succeeded, and 0 if it failed.
+  @param out_value A pointer to a bool where the parsed value should
+  be placed.
+
+  @return 1 on success, 0 on failure.
 */
-SNAKY_API bool snaky_parse_bool(const char *str, int *out_success);
+SNAKY_API int snaky_parse_bool(const char *str, bool *out_value);
 /**
   Reads an integer attribute value and obtains the
   actual int equivalent of it.
@@ -721,11 +766,12 @@ SNAKY_API bool snaky_parse_bool(const char *str, int *out_success);
   @param origin The start of the whole attribute string.
   @param str The string holding the integer attribute value. This is not
   an attribute string.
-  @param out_success A pointer to an int that indicates
-  whether or not the function succeeded. It will be equal to 1 if it
-  succeeded, and 0 if it failed.
+  @param out_value A pointer to an int where the parsed value should
+  be placed.
+
+  @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_parse_int(const char *origin, const char *str, int *out_success);
+SNAKY_API int snaky_parse_int(const char *origin, const char *str, int *out_value);
 /**
   Reads a float attribute value and obtains the
   actual float equivalent of it.
@@ -733,11 +779,12 @@ SNAKY_API int snaky_parse_int(const char *origin, const char *str, int *out_succ
   @param origin The start of the whole attribute string.
   @param str The string holding the float attribute value. This is not
   an attribute string.
-  @param out_success A pointer to an int that indicates whether
-  or not the function succeeded. It will be equal to 1 if it
-  succeeded, and 0 if it failed.
+  @param out_value A pointer to a float where the parsed value should
+  be placed.
+
+  @return 1 on success, 0 on failure.
 */
-SNAKY_API float snaky_parse_float(const char *origin, const char *str, int *out_success);
+SNAKY_API int snaky_parse_float(const char *origin, const char *str, float *out_value);
 /**
   Reads a double attribute value and obtains the
   actual double equivalent of it.
@@ -745,11 +792,12 @@ SNAKY_API float snaky_parse_float(const char *origin, const char *str, int *out_
   @param origin The start of the whole attribute string.
   @param str The string holding the double attribute value. This is not
   an attribute string.
-  @param out_success A pointer to an int that indicates whether
-  or not the function succeeded. It will be equal to 1 if it
-  succeeded, and 0 if it failed.
+  @param out_value A pointer to a double where the parsed value should
+  be placed.
+
+  @return 1 on success, 0 on failure.
 */
-SNAKY_API double snaky_parse_double(const char *origin, const char *str, int *out_success);
+SNAKY_API int snaky_parse_double(const char *origin, const char *str, double *out_value);
 /**
   Similarly to other snaky_parse_[type] functions, this function
   parses a generic value based on a target data type. More specifically,
@@ -775,32 +823,34 @@ SNAKY_API double snaky_parse_double(const char *origin, const char *str, int *ou
   or not the function succeeded. It will be equal to 1 if it
   succeeded, and 0 if it failed.
 
+  @return 1 on success, 0 on failure.
+
   @see snaky_parse_target_attrib_value(const char*, const char*, snaky_data_type, void*, const char**, const char**, int*)
 */
-SNAKY_API void snaky_parse_value(const char *origin, const char *str, snaky_data_type target_type, void *out_value, int *out_success);
+SNAKY_API int snaky_parse_value(const char *origin, const char *str, snaky_data_type target_type, void *out_value);
 /**
   Parses a generic value just like snaky_parse_value(...) but obtains
   the value from an attribute from an attribute string.
 
-  @important The 'out_info' and 'out_success' pointers cannot be NULL!
+  @return 1 on success, 0 on failure.
 
-  @see snaky_parse_value(const char*, snaky_data_type, void*, int*)
+  @see snaky_parse_value(const char*, snaky_data_type, void*)
 */
-SNAKY_API void snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_attrib_info *out_info, int *out_success);
+SNAKY_API int snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_attrib_info *out_info);
 /**
   Same as snaky_parse_target_attrib_value(...) but plabuffer
   the parsed attribute value into a buffer.
 
-  @see snaky_parse_target_attrib_value(const char*, const char*, snaky_data_type, void*, snaky_attrib_info*, int*)
+  @see snaky_parse_target_attrib_value(const char*, const char*, snaky_data_type, void*, snaky_attrib_info*)
 */
-SNAKY_API void snaky_parse_target_attrib_value_buf(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, char *buffer, size_t buffer_size, snaky_attrib_info *out_info, int *out_success);
+SNAKY_API int snaky_parse_target_attrib_value_buf(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, char *buffer, size_t buffer_size, snaky_attrib_info *out_info);
 /**
   Same as snaky_parse_target_attrib_value_buf(...) but uses a
   snaky_string instead of a normal buffer.
 
-  @see snaky_parse_target_attrib_value_buf(const char*, const char*, snaky_data_type, void*, char*, size_t, snaky_attrib_info*, int*)
+  @see snaky_parse_target_attrib_value_buf(const char*, const char*, snaky_data_type, void*, char*, size_t, snaky_attrib_info*)
 */
-SNAKY_API void snaky_parse_target_attrib_value_str(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_string *buffer, snaky_attrib_info *out_info, int *out_success);
+SNAKY_API int snaky_parse_target_attrib_value_str(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_string *buffer, snaky_attrib_info *out_info);
 /**
   Parses a data type into a string.
 
@@ -814,6 +864,59 @@ SNAKY_API void snaky_parse_target_attrib_value_str(const char *str, const char *
   @return 1 on success, 0 on failure.
 */
 SNAKY_API int snaky_parse_data_type(snaky_data_type data_type, char *buffer, size_t buffer_size);
+
+/**
+  Uses snaky_obj_field objects alongside an attribute string
+  to quickly parse values and assign them to a given struct.
+
+  An example of how this works:
+
+  Imagine you have a struct holding 2 integer values:
+
+  @code
+  struct Vector2
+  {
+	int x;
+	int y;
+  };
+  @endcode
+
+  Before parsing an attribute string holding the desired values,
+  prepare some snaky_obj_field objects like so:
+
+  @code
+  snaky_obj_field fields[] = {
+	{
+		.target_attrib = "vec2.x",
+		.data_type = SNAKY_INT,
+		.offset = offsetof(Vector2, x),
+		.size = sizeof(int)
+	},
+	{
+		.target_attrib = "vec2.y",
+		.data_type = SNAKY_INT,
+		.offset = offsetof(Vector2, y),
+		.size = sizeof(int)
+	}
+  };
+  @endcode
+
+  Now call this function like so:
+
+  @code
+  const char *attribs = "...";
+  Vector2 my_vec2 = {0};
+  snaky_parse_object(attribs, &my_vec2, fields, 2);
+  @endcode
+
+  @param str The original attribute string.
+  @param target_struct A pointer to the struct where the parsed values should be assigned.
+  @param fields An array of snaky_obj_field structs.
+  @param num_fields The number of snaky_obj_field structs in the array given.
+
+  @return 1 on success, 0 on failure.
+*/
+SNAKY_API int snaky_parse_object(const char *str, void *target_struct, snaky_obj_field *fields, size_t num_fields);
 
 /**
   Determines if a file exists.
