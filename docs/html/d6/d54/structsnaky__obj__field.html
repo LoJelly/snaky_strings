@@ -97,16 +97,17 @@ $(function(){initNavTree('d6/d54/structsnaky__obj__field.html','../../','d8/d74/
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
-<tr class="memitem:ac7a3572ad99cd0a85d90aaed5879c715" id="r_ac7a3572ad99cd0a85d90aaed5879c715"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac7a3572ad99cd0a85d90aaed5879c715">target_attrib</a></td></tr>
+<tr class="memitem:aa6d6f08d4d1c9394e78a52c941e4eb46" id="r_aa6d6f08d4d1c9394e78a52c941e4eb46"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa6d6f08d4d1c9394e78a52c941e4eb46">name</a></td></tr>
+<tr class="memitem:a253f380c7e59722cb214d97fbe28065e" id="r_a253f380c7e59722cb214d97fbe28065e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3b">snaky_data_type</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a253f380c7e59722cb214d97fbe28065e">data_type</a></td></tr>
 <tr class="memitem:a16956eeec65a67af09010083032532ee" id="r_a16956eeec65a67af09010083032532ee"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a16956eeec65a67af09010083032532ee">offset</a></td></tr>
 <tr class="memitem:a1ff1b5bd97a192cdfcf4e712a940f2b6" id="r_a1ff1b5bd97a192cdfcf4e712a940f2b6"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1ff1b5bd97a192cdfcf4e712a940f2b6">size</a></td></tr>
 <tr class="memitem:a6daeed1cfbaa70257d71cb7d1d286374" id="r_a6daeed1cfbaa70257d71cb7d1d286374"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6daeed1cfbaa70257d71cb7d1d286374">count</a></td></tr>
-<tr class="memitem:a253f380c7e59722cb214d97fbe28065e" id="r_a253f380c7e59722cb214d97fbe28065e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3b">snaky_data_type</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a253f380c7e59722cb214d97fbe28065e">data_type</a></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Represents a single field within a struct/object. </p>
+<div class="textblock"><p>Represents a single field within a struct/object.</p>
+<p>The values in the <a class="el" href="../../d6/d54/structsnaky__obj__field.html">snaky_obj_field</a> are in the order of: name, data type, offset, size, count. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00281">281</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00284">284</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
 <a id="a6daeed1cfbaa70257d71cb7d1d286374" name="a6daeed1cfbaa70257d71cb7d1d286374"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a6daeed1cfbaa70257d71cb7d1d286374">&#9670;&#160;</a></span>count</h2>
@@ -122,7 +123,7 @@ Public Attributes</h2></td></tr>
 <p>The number of elements within the field. If the field is a single value, then this should be 1. If the field is an array, then this should be equal to the total number of elements within that array excluding nested arrays.</p>
 <dl class="section important"><dt>Important</dt><dd>If this value is 0 when the snaky_parse_object(...) function is called, it is automatically set to 1 by default. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00308">308</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00321">321</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>
@@ -140,7 +141,24 @@ Public Attributes</h2></td></tr>
 <p>The data type of the attribute and value.</p>
 <dl class="section important"><dt>Important</dt><dd>Do not use SNAKY_ARRAY, even if the object's field is an array. The data type should always reflect the underlying type; so if it's an integer array, it should be SNAKY_INT. </dd></dl>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00318">318</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00299">299</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+
+</div>
+</div>
+<a id="aa6d6f08d4d1c9394e78a52c941e4eb46" name="aa6d6f08d4d1c9394e78a52c941e4eb46"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa6d6f08d4d1c9394e78a52c941e4eb46">&#9670;&#160;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char* snaky_obj_field::name</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>The attribute in the original attribute string to target. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00289">289</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>
@@ -157,7 +175,7 @@ Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 <p>The offset in the struct where the matching value is found. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00291">291</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00304">304</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>
@@ -174,24 +192,7 @@ Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 <p>The size of a single element within the field. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00296">296</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
-
-</div>
-</div>
-<a id="ac7a3572ad99cd0a85d90aaed5879c715" name="ac7a3572ad99cd0a85d90aaed5879c715"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac7a3572ad99cd0a85d90aaed5879c715">&#9670;&#160;</a></span>target_attrib</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">const char* snaky_obj_field::target_attrib</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<p>The attribute in the original attribute string to target. </p>
-
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00286">286</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00309">309</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>

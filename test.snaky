@@ -3,6 +3,6 @@
 		title = Test;
 		width = 1280;
 		height = 720;
-		resizable = TRUE;
+		bg_color = [ 200, 50, 255 ];
 	>};
 >};

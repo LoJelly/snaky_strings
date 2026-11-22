@@ -421,7 +421,7 @@ Functions</h2></td></tr>
 <p>Single-argument functions that are evaluated in attribute strings.</p>
 <p>They should take in a single float value, and return a single float value. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l01015">1015</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l01054">1054</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>
@@ -451,7 +451,8 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>Represents a single field within a struct/object. </p>
+<p>Represents a single field within a struct/object.</p>
+<p>The values in the <a class="el" href="../../d6/d54/structsnaky__obj__field.html">snaky_obj_field</a> are in the order of: name, data type, offset, size, count. </p>
 
 </div>
 </div>
@@ -551,16 +552,16 @@ Functions</h2></td></tr>
 </td></tr>
 </table>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00324">324</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
-<div class="fragment"><div class="line"><span class="lineno">  325</span>{</div>
-<div class="line"><span class="lineno">  346</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb">SNAKY_FWRITE_TEXT</a>,</div>
-<div class="line"><span class="lineno">  353</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3">SNAKY_FWRITE_BINARY</a>,</div>
-<div class="line"><span class="lineno">  359</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af">SNAKY_FWRITE_ENCRYPT</a></div>
-<div class="line"><span class="lineno">  360</span>} <a class="code hl_enumeration" href="#a8117c407ffac2f119d28e31781ccf823">snaky_fwrite_mode</a>;</div>
-<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823">snaky_fwrite_mode</a></div><div class="ttdeci">snaky_fwrite_mode</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00324">snaky_strings.h:325</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3">SNAKY_FWRITE_BINARY</a></div><div class="ttdeci">@ SNAKY_FWRITE_BINARY</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00353">snaky_strings.h:353</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb">SNAKY_FWRITE_TEXT</a></div><div class="ttdeci">@ SNAKY_FWRITE_TEXT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00346">snaky_strings.h:346</a></div></div>
-<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af">SNAKY_FWRITE_ENCRYPT</a></div><div class="ttdeci">@ SNAKY_FWRITE_ENCRYPT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00359">snaky_strings.h:359</a></div></div>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00327">327</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<div class="fragment"><div class="line"><span class="lineno">  328</span>{</div>
+<div class="line"><span class="lineno">  349</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb">SNAKY_FWRITE_TEXT</a>,</div>
+<div class="line"><span class="lineno">  356</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3">SNAKY_FWRITE_BINARY</a>,</div>
+<div class="line"><span class="lineno">  362</span>    <a class="code hl_enumvalue" href="#a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af">SNAKY_FWRITE_ENCRYPT</a></div>
+<div class="line"><span class="lineno">  363</span>} <a class="code hl_enumeration" href="#a8117c407ffac2f119d28e31781ccf823">snaky_fwrite_mode</a>;</div>
+<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823">snaky_fwrite_mode</a></div><div class="ttdeci">snaky_fwrite_mode</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00327">snaky_strings.h:328</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3">SNAKY_FWRITE_BINARY</a></div><div class="ttdeci">@ SNAKY_FWRITE_BINARY</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00356">snaky_strings.h:356</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb">SNAKY_FWRITE_TEXT</a></div><div class="ttdeci">@ SNAKY_FWRITE_TEXT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00349">snaky_strings.h:349</a></div></div>
+<div class="ttc" id="asnaky__strings_8h_html_a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af"><div class="ttname"><a href="#a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af">SNAKY_FWRITE_ENCRYPT</a></div><div class="ttdeci">@ SNAKY_FWRITE_ENCRYPT</div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00362">snaky_strings.h:362</a></div></div>
 </div><!-- fragment -->
 </div>
 </div>
@@ -1393,25 +1394,49 @@ Valid boolean attribute include: 'TRUE,' 'ON,' 'FALSE,' and 'OFF.'</dd></dl>
 </div><!-- fragment --><p>Before parsing an attribute string holding the desired values, prepare some <a class="el" href="../../d6/d54/structsnaky__obj__field.html">snaky_obj_field</a> objects like so:</p>
 <div class="fragment"><div class="line"><a class="code hl_struct" href="../../d6/d54/structsnaky__obj__field.html">snaky_obj_field</a> fields[] = {</div>
 <div class="line">  {</div>
-<div class="line">    .target_attrib = <span class="stringliteral">&quot;vec2.x&quot;</span>,</div>
+<div class="line">    .name = <span class="stringliteral">&quot;vec2.x&quot;</span>,</div>
 <div class="line">    .data_type = <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35">SNAKY_INT</a>,</div>
 <div class="line">    .offset = offsetof(Vector2, x),</div>
 <div class="line">    .size = <span class="keyword">sizeof</span>(int)</div>
+<div class="line">    .count = 1</div>
 <div class="line">  },</div>
 <div class="line">  {</div>
-<div class="line">    .target_attrib = <span class="stringliteral">&quot;vec2.y&quot;</span>,</div>
+<div class="line">    .name = <span class="stringliteral">&quot;vec2.y&quot;</span>,</div>
 <div class="line">    .data_type = <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35">SNAKY_INT</a>,</div>
 <div class="line">    .offset = offsetof(Vector2, y),</div>
-<div class="line">    .size = <span class="keyword">sizeof</span>(int)</div>
+<div class="line">    .size = <span class="keyword">sizeof</span>(int),</div>
+<div class="line">    .count = 1</div>
 <div class="line">  }</div>
 <div class="line">};</div>
-<div class="ttc" id="astructsnaky__obj__field_html"><div class="ttname"><a href="../../d6/d54/structsnaky__obj__field.html">snaky_obj_field</a></div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00281">snaky_strings.h:282</a></div></div>
-</div><!-- fragment --><p>Now call this function like so:</p>
-<div class="fragment"><div class="line"><span class="keyword">const</span> <span class="keywordtype">char</span> *attribs = <span class="stringliteral">&quot;...&quot;</span>;</div>
+<div class="ttc" id="astructsnaky__obj__field_html"><div class="ttname"><a href="../../d6/d54/structsnaky__obj__field.html">snaky_obj_field</a></div><div class="ttdef"><b>Definition</b> <a href="../../da/dd1/snaky__strings_8h_source.html#l00284">snaky_strings.h:285</a></div></div>
+</div><!-- fragment --><p>OR it could look like this:</p>
+<div class="fragment"><div class="line"><a class="code hl_struct" href="../../d6/d54/structsnaky__obj__field.html">snaky_obj_field</a> fields[] = {</div>
+<div class="line">  {</div>
+<div class="line">    <span class="stringliteral">&quot;vec2.x&quot;</span>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35">SNAKY_INT</a>,</div>
+<div class="line">    offsetof(Vector2, x),</div>
+<div class="line">    <span class="keyword">sizeof</span>(int)</div>
+<div class="line">  },</div>
+<div class="line">  {</div>
+<div class="line">    <span class="stringliteral">&quot;vec2.y&quot;</span>,</div>
+<div class="line">    <a class="code hl_enumvalue" href="#a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35">SNAKY_INT</a>,</div>
+<div class="line">    offsetof(Vector2, y),</div>
+<div class="line">    <span class="keyword">sizeof</span>(int)</div>
+<div class="line">  },</div>
+<div class="line">};</div>
+<div class="line">@encode</div>
+<div class="line"> </div>
+<div class="line">Now call <span class="keyword">this</span> function like so:</div>
+<div class="line"> </div>
+<div class="line">@code</div>
+<div class="line"><span class="keyword">const</span> <span class="keywordtype">char</span> *attribs = <span class="stringliteral">&quot;...&quot;</span>;</div>
 <div class="line">Vector2 my_vec2 = {0};</div>
 <div class="line"><a class="code hl_function" href="#a2e526981053079dc6baea90bb35f9ea7">snaky_parse_object</a>(attribs, &amp;my_vec2, fields, 2);</div>
 <div class="ttc" id="asnaky__strings_8h_html_a2e526981053079dc6baea90bb35f9ea7"><div class="ttname"><a href="#a2e526981053079dc6baea90bb35f9ea7">snaky_parse_object</a></div><div class="ttdeci">SNAKY_API int snaky_parse_object(const char *str, void *target_struct, snaky_obj_field *fields, size_t num_fields)</div></div>
-</div><!-- fragment --><dl class="params"><dt>Parameters</dt><dd>
+</div><!-- fragment --><dl class="section note"><dt>Note</dt><dd>If the field being parsed is an array, the only thing you have to add is '.count = NUM_ELEMENTS_IN_ARRAY' in the respective <a class="el" href="../../d6/d54/structsnaky__obj__field.html">snaky_obj_field</a> struct. For example, for this array: '[2, 4, 6],' the '.count' value should be 3. But for this array: '[[2, 4, 6], [9, 11, 13]],' the '.count' value should be 6, since there are 6 integers in the entire array.</dd>
+<dd>
+If initializing the <a class="el" href="../../d6/d54/structsnaky__obj__field.html">snaky_obj_field</a> structs using the '.value' notation, the 'count' value does not need to be initialized to 1 because this function automatically defaults to 1 even if it is 0. It makes it explicit it is only 1 value, but it is not necessary. However, if you are not using the '.value' notation, then it will become necessary to set it to 1.</dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramname">str</td><td>The original attribute string. </td></tr>
     <tr><td class="paramname">target_struct</td><td>A pointer to the struct where the parsed values should be assigned. </td></tr>

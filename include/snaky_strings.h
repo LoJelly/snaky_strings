@@ -277,13 +277,26 @@ typedef struct snaky_attrib_info
 
 /**
   Represents a single field within a struct/object.
+
+  The values in the snaky_obj_field are in the order of:
+  name, data type, offset, size, count.
 */
 typedef struct snaky_obj_field
 {
 	/**
 	  The attribute in the original attribute string to target.
 	*/
-	const char *target_attrib;
+	const char *name;
+	/**
+	  The data type of the attribute and value.
+
+	  @important Do not use SNAKY_ARRAY, even
+	  if the object's field is an array. The
+	  data type should always reflect the underlying
+	  type; so if it's an integer array, it should
+	  be SNAKY_INT.
+	*/
+	snaky_data_type data_type;
 	/**
 	  The offset in the struct where the
 	  matching value is found.
@@ -306,16 +319,6 @@ typedef struct snaky_obj_field
 	  function is called, it is automatically set to 1 by default.
 	*/
 	size_t count;
-	/**
-	  The data type of the attribute and value.
-
-	  @important Do not use SNAKY_ARRAY, even
-	  if the object's field is an array. The
-	  data type should always reflect the underlying
-	  type; so if it's an integer array, it should
-	  be SNAKY_INT.
-	*/
-	snaky_data_type data_type;
 } snaky_obj_field;
 
 /**
@@ -887,19 +890,40 @@ SNAKY_API int snaky_parse_data_type(snaky_data_type data_type, char *buffer, siz
   @code
   snaky_obj_field fields[] = {
 	{
-		.target_attrib = "vec2.x",
+		.name = "vec2.x",
 		.data_type = SNAKY_INT,
 		.offset = offsetof(Vector2, x),
 		.size = sizeof(int)
+		.count = 1
 	},
 	{
-		.target_attrib = "vec2.y",
+		.name = "vec2.y",
 		.data_type = SNAKY_INT,
 		.offset = offsetof(Vector2, y),
-		.size = sizeof(int)
+		.size = sizeof(int),
+		.count = 1
 	}
   };
   @endcode
+
+  OR it could look like this:
+
+  @code
+  snaky_obj_field fields[] = {
+	{
+		"vec2.x",
+		SNAKY_INT,
+		offsetof(Vector2, x),
+		sizeof(int)
+	},
+	{
+		"vec2.y",
+		SNAKY_INT,
+		offsetof(Vector2, y),
+		sizeof(int)
+	},
+  };
+  @encode
 
   Now call this function like so:
 
@@ -908,6 +932,21 @@ SNAKY_API int snaky_parse_data_type(snaky_data_type data_type, char *buffer, siz
   Vector2 my_vec2 = {0};
   snaky_parse_object(attribs, &my_vec2, fields, 2);
   @endcode
+
+  @note If the field being parsed is an array, the only
+  thing you have to add is '.count = NUM_ELEMENTS_IN_ARRAY'
+  in the respective snaky_obj_field struct. For example,
+  for this array: '[2, 4, 6],' the '.count' value
+  should be 3. But for this array: '[[2, 4, 6], [9, 11, 13]],'
+  the '.count' value should be 6, since there are 6 integers
+  in the entire array.
+
+  @note If initializing the snaky_obj_field structs using the '.value'
+  notation, the 'count' value does not need to be initialized to 1 because
+  this function automatically defaults to 1 even if it is 0.
+  It makes it explicit it is only 1 value, but it is not
+  necessary. However, if you are not using the '.value' notation,
+  then it will become necessary to set it to 1.
 
   @param str The original attribute string.
   @param target_struct A pointer to the struct where the parsed values should be assigned.

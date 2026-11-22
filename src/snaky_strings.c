@@ -1428,9 +1428,6 @@ static int parse_array(const char *const str_origin, const char *const array, sn
 				return 1;
 			}
 		}
-
-		vl_log(VL_ERROR, "End of string reached! Failed to parse array '%s' in string: '%s'!\n", array, str_origin);
-		return 0;
 	}
 
 	return 0;
@@ -1681,8 +1678,6 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 			}
 		}
 
-		// if the end of the string was reached, return 0 because the last chained attrib was not resolved
-		vl_log(VL_ERROR, "End of string reached! Failed to find chained attribute '%s' in string: '%s'!\n", chained_attrib, str);
 		return 0;
 	}
 
@@ -3371,7 +3366,7 @@ int snaky_parse_object(const char *str, void *target_struct, snaky_obj_field *fi
 		// num_elem is the n-th elem within the field (always 1 for single-value fields)
 		for(size_t num_elem = 0; num_elem < field->count; ++num_elem)
 		{
-			const char *query = field->target_attrib;
+			const char *query = field->name;
 
 			// see if the field is an array
 			if(field->count > 1)
@@ -3388,57 +3383,52 @@ int snaky_parse_object(const char *str, void *target_struct, snaky_obj_field *fi
 					return 0;
 
 				// insert the indices at end of the target attribute name
-				snprintf(target_attrib_buf, sizeof(target_attrib_buf), "%s%s", field->target_attrib, result_index);
+				snprintf(target_attrib_buf, sizeof(target_attrib_buf), "%s%s", field->name, result_index);
 				query = target_attrib_buf;
 			}
 
-			int found = snaky_parse_target_attrib_buf(str, query, buf, sizeof(buf), NULL);
-
-			void *value = ((char*) target_struct) + field->offset + (num_elem * field->size);
-			int success = 0;
-
-			// TODO make this repeated block a macro or function? (repeated logic in snaky_parse_value(...))
-			switch(field->data_type)
+			if(snaky_parse_target_attrib_buf(str, query, buf, sizeof(buf), NULL))
 			{
-				case SNAKY_CHAR:
-					char c = '\0';
-					if((success = snaky_parse_char(buf, &c)))
-						*((char*) value) = c;
-					break;
-				case SNAKY_BOOL:
-					bool b = 0;
-					if((success = snaky_parse_bool(buf, &b)))
-						*((bool*) value) = b;
-					break;
-				case SNAKY_INT:
-					int i = 0;
-					if((success = snaky_parse_int(str, buf, &i)))
-						*((int*) value) = i;
-					break;
-				case SNAKY_FLOAT:
-					float f = 0.0f;
-					if((success = snaky_parse_float(str, buf, &f)))
-						*((float*) value) = f;
-					break;
-				case SNAKY_DOUBLE:
-					double d = 0.0;
-					if((success = snaky_parse_double(str, buf, &d)))
-						*((double*) value) = d;
-					break;
-				case SNAKY_STRING:
-					strncpy((char*) value, buf, field->size - 1);
-					((char*) value)[field->size - 1] = '\0';
-					success = 1;
-					break;
-				default:
-					vl_log(VL_ERROR, "Invalid data type in snaky_parse_attribs_fields(...): %d\n", field->data_type);
-					return 0;
-			}
+				void *value = ((char*) target_struct) + field->offset + (num_elem * field->size);
+				int success = 0;
 
-			if(!success)
-			{
-				vl_log(VL_ERROR, "Failed to parse value: '%s' into the data type: %d!\n", buf, field->data_type);
-				return 0;
+				// TODO make this repeated block a macro or function? (repeated logic in snaky_parse_value(...))
+				switch(field->data_type)
+				{
+					case SNAKY_CHAR:
+						char c = '\0';
+						if((success = snaky_parse_char(buf, &c)))
+							*((char*) value) = c;
+						break;
+					case SNAKY_BOOL:
+						bool b = 0;
+						if((success = snaky_parse_bool(buf, &b)))
+							*((bool*) value) = b;
+						break;
+					case SNAKY_INT:
+						int i = 0;
+						if((success = snaky_parse_int(str, buf, &i)))
+							*((int*) value) = i;
+						break;
+					case SNAKY_FLOAT:
+						float f = 0.0f;
+						if((success = snaky_parse_float(str, buf, &f)))
+							*((float*) value) = f;
+						break;
+					case SNAKY_DOUBLE:
+						double d = 0.0;
+						if((success = snaky_parse_double(str, buf, &d)))
+							*((double*) value) = d;
+						break;
+					case SNAKY_STRING:
+						strncpy((char*) value, buf, field->size - 1);
+						((char*) value)[field->size - 1] = '\0';
+						success = 1;
+						break;
+					default:
+						vl_log(VL_ERROR, "Invalid data type in snaky_parse_object(...): %d\n", field->data_type);
+						return 0;
+				}
 			}
 		}
 	}
