@@ -654,15 +654,15 @@ static int resolve_data_type(const char *start, size_t *out_jump, snaky_attrib_i
 		if(out_jump)
 			*out_jump += 5;
 	}
-	else if(strncmp(start, "attribs", 6) == 0)
-	{
-		out_info->data_type = SNAKY_ATTRIB_STRING;
-		if(out_jump)
-			*out_jump += 6;
-	}
 	else if(strncmp(start, "string", 6) == 0)
 	{
 		out_info->data_type = SNAKY_STRING;
+		if(out_jump)
+			*out_jump += 6;
+	}
+	else if(strncmp(start, "obj", 6) == 0)
+	{
+		out_info->data_type = SNAKY_OBJECT;
 		if(out_jump)
 			*out_jump += 6;
 	}
@@ -1057,7 +1057,7 @@ static int parse_target_attrib(const char *str_origin, const char *attribs_start
 	if(strncmp(attribs_start, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) == 0)
 	{
 		if(out_info)
-			out_info->data_type = SNAKY_ATTRIB_STRING;
+			out_info->data_type = SNAKY_OBJECT;
 		return parse_value(str_origin, attribs_start, sbuffer, buffer, buffer_size, find_end_of_attribs, out_info);
 	}
 	else if(*attribs_start == ARR_OPENING)
@@ -1314,7 +1314,7 @@ static int get_multidimensional_index(const char *str_origin, size_t index, size
 
 	return 1;
 }
-static int parse_array(const char *const str_origin, const char *const array, snaky_string *sbuffer, char *buffer, size_t buffer_size, snaky_attrib_info *out_info)
+static int parse_array_subscript(const char *const str_origin, const char *const array, snaky_string *sbuffer, char *buffer, size_t buffer_size, snaky_attrib_info *out_info)
 {
 	char index_values[SNAKY_MAX_ARR_DIMENSIONS][SNAKY_BUF_SIZE] = {0};
 	size_t num_indices = 0;
@@ -1432,6 +1432,20 @@ static int parse_array(const char *const str_origin, const char *const array, sn
 
 	return 0;
 }
+static bool is_string(const char *str)
+{
+	if(!str)
+		return false;
+
+	// make sure string starts with '"'
+	bool valid_start = *str && (*str == DOUBLE_QUOTE || *str == SINGLE_QUOTE);
+
+	// find the matching '}'
+	const char *end_pos = find_end_of_str(str);
+
+	// if all those are true, then it's a string
+	return valid_start && end_pos != NULL;
+}
 static int prepare_parse_target_attrib(const char *str, const char *attrib_name, snaky_string *sbuffer, char *buffer, size_t buffer_size, snaky_attrib_info *out_info)
 {
 	const char *str_origin = str;
@@ -1442,7 +1456,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 		return 0;
 
 	// see if resolved attrib name is invalid (starts with number of symbol)
-	if(!isalpha(*attrib_name) && !snaky_is_string(attrib_name))
+	if(!isalpha(*attrib_name) && !is_string(attrib_name))
 		return 0;
 
 	// see if user is trying to find a nested attribute :
@@ -1530,8 +1544,8 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 			const char *chained_attrib = chained_attribs[curr_chained_attrib];
 			size_t chained_attrib_len = strlen(chained_attrib);
 
-			// if the chained attrib is an array, parse accordingly
-			if(parse_array(str_origin, chained_attrib, sbuffer, buffer, buffer_size, out_info))
+			// if the chained attrib uses an array subscript operator, parse accordingly
+			if(parse_array_subscript(str_origin, chained_attrib, sbuffer, buffer, buffer_size, out_info))
 			{
 				if(sbuffer)
 					while(snaky_parse_target_attrib_str(str, sbuffer->data, sbuffer, out_info));
@@ -1682,7 +1696,7 @@ static int prepare_parse_target_attrib(const char *str, const char *attrib_name,
 	}
 
 	// see if user searching for a value within an array (requires '[N]' in 'attrib_name')
-	if(parse_array(str_origin, attrib_name, sbuffer, buffer, buffer_size, out_info))
+	if(parse_array_subscript(str_origin, attrib_name, sbuffer, buffer, buffer_size, out_info))
 	{
 		if(sbuffer)
 			while(snaky_parse_target_attrib_str(str, sbuffer->data, sbuffer, out_info));
@@ -1905,7 +1919,7 @@ static int parse_attrib(const char *str_origin, const char *attribs_start, snaky
 	else if(strncmp(attribs_start, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) == 0)
 	{
 		if(out_info)
-			out_info->data_type = SNAKY_ATTRIB_STRING;
+			out_info->data_type = SNAKY_OBJECT;
 		return parse_value(str_origin, attribs_start, value_str, value_buffer, value_buffer_size, find_end_of_attribs, out_info);
 	}
 
@@ -2427,32 +2441,6 @@ size_t snaky_count_attribs(const char *str)
 	return count;
 }
 
-bool snaky_is_string(const char *str)
-{
-	if(!str)
-		return false;
-
-	// make sure string starts with '"'
-	bool valid_start = *str && (*str == DOUBLE_QUOTE || *str == SINGLE_QUOTE);
-
-	// find the matching '}'
-	const char *end_pos = find_end_of_str(str);
-
-	// if all those are true, then it's a string
-	return valid_start && end_pos != NULL;
-}
-bool snaky_is_attrib_string(const char *str)
-{
-	if(!str || strncmp(str, ATTRIB_STRING_OPENING, ATTRIB_STRING_OPENING_LEN) != 0)
-		return false;
-
-	// find the matching '>'
-	const char *end_pos = find_end_of_attribs(str);
-
-	// if a matching '>' was found, then it is an attribute string
-	return end_pos != NULL;
-}
-
 void snaky_goto_attrib(const char *str, const char *attrib_name, const char **out_attrib_pos)
 {
 	if(!out_attrib_pos)
@@ -2681,12 +2669,12 @@ int snaky_destroy_attrib_list(snaky_attrib_list *list)
 
 int snaky_parse_char(const char *str, char *out_value)
 {
-	// default to 0
-	if(out_value)
-		*out_value = '\0';;
-
 	if(!str || strlen(str) != 1)
 		return 0;
+
+	// default to 0
+	if(out_value)
+		*out_value = '\0';
 
 	char c = *str;
 
@@ -2697,12 +2685,12 @@ int snaky_parse_char(const char *str, char *out_value)
 }
 int snaky_parse_bool(const char *str, bool *out_value)
 {
+	if(!str || strlen(str) == 0)
+		return 0;
+
 	// default to 0
 	if(out_value)
 		*out_value = 0;
-
-	if(!str || strlen(str) == 0)
-		return 0;
 
 	if(strncmp(str, "TRUE", 4) == 0 || strncmp(str, "ON", 2) == 0)
 	{
@@ -2833,7 +2821,7 @@ static int parse_expression(const char *origin, const char **str, float *out_res
 static int parse_factor(const char *origin, const char **str, float *out_result)
 {
 	// skip any strings and whitespace
-	if(snaky_is_string(*str))
+	if(is_string(*str))
 	{
 		*str += 1;
 		skip_whitespace(str, NULL);
@@ -2922,9 +2910,9 @@ static int parse_factor(const char *origin, const char **str, float *out_result)
 				vl_log(VL_ERROR, "The parsed attribute '%s' is a string, cannot parse a value!\n", attrib_name);
 				return 0;
 			}
-			else if(info.data_type == SNAKY_ATTRIB_STRING)
+			else if(info.data_type == SNAKY_OBJECT)
 			{
-				vl_log(VL_ERROR, "The parsed attribute '%s' is an attribute string, cannot parse a value!\n", attrib_name);
+				vl_log(VL_ERROR, "The parsed attribute '%s' is an object (nested attribute string), cannot parse a value!\n", attrib_name);
 				return 0;
 			}
 
@@ -3150,12 +3138,12 @@ static int parse_term(const char *origin, const char **str, float *out_result)
 }
 int snaky_parse_int(const char *origin, const char *str, int *out_value)
 {
+	if(!str || strlen(str) == 0)
+		return 0;
+
 	// default to 0
 	if(out_value)
 		*out_value = 0;
-
-	if(!str || strlen(str) == 0)
-		return 0;
 
 	float ff = 0.0f;
 	if(parse_expression(origin, &str, &ff))
@@ -3178,12 +3166,12 @@ int snaky_parse_int(const char *origin, const char *str, int *out_value)
 }
 int snaky_parse_float(const char *origin, const char *str, float *out_value)
 {
+	if(!str || strlen(str) == 0)
+		return 0;
+
 	// default to 0
 	if(out_value)
 		*out_value = 0.0f;
-
-	if(!str || strlen(str) == 0)
-		return 0;
 
 	float ff = 0.0f;
 	if(parse_expression(origin, &str, &ff))
@@ -3206,12 +3194,12 @@ int snaky_parse_float(const char *origin, const char *str, float *out_value)
 }
 int snaky_parse_double(const char *origin, const char *str, double *out_value)
 {
+	if(!str || strlen(str) == 0)
+		return 0;
+
 	// default to 0
 	if(out_value)
 		*out_value = 0;
-
-	if(!str || strlen(str) == 0)
-		return 0;
 
 	float ff = 0.0f;
 	if(parse_expression(origin, &str, &ff))
@@ -3236,7 +3224,6 @@ int snaky_parse_value(const char *origin, const char *str, snaky_data_type targe
 {
 	int success = 0;
 
-	// TODO repeated logic here and in snaky_parse_object(...)
 	switch(target_type)
 	{
 		case SNAKY_CHAR:
@@ -3271,34 +3258,59 @@ int snaky_parse_value(const char *origin, const char *str, snaky_data_type targe
 
 	return success;
 }
-int snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_attrib_info *out_info)
+int snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type data_type, void *out_value, size_t num_elems, size_t elem_size)
 {
-	snaky_string attrib = {0};
-	if(!snaky_prepare_str(&attrib, SNAKY_BUF_SIZE))
-		return 0;
+	char target_attrib_buf[SNAKY_BUF_SIZE * 2] = {0};
+	char buf[SNAKY_BUF_SIZE] = {0};
 
-	int success = 0;
-	if(snaky_parse_target_attrib_str(str, attrib_name, &attrib, out_info))
-		success = snaky_parse_value(str, attrib.data, target_type, out_value);
+	for(size_t i = 0; i < num_elems; ++i)
+	{
+		const char *query = attrib_name;
 
-	snaky_free_str(&attrib);
+		// if the value is an array (more than one element):
+		if(num_elems > 1)
+		{
+			// change the query to obtain each value in the array:
+			char result_index[SNAKY_BUF_SIZE] = {0};
+			size_t dimensions[SNAKY_MAX_ARR_DIMENSIONS] = {0};
+			size_t num_dimensions = 0;
+			if(!parse_dimensions(str, query, strlen(query), dimensions, &num_dimensions))
+				return 0;
+			if(!get_multidimensional_index(str, i, dimensions, num_dimensions, result_index, sizeof(result_index), NULL, 0))
+				return 0;
 
-	if(!success)
-		vl_log(VL_ERROR, "Failed to parse target attrib value: string: '%s', attribute name: '%s'!\n", str, attrib_name);
+			// append the subscript operator to the query
+			snprintf(target_attrib_buf, sizeof(target_attrib_buf), "%s%s", attrib_name, result_index);
+			query = target_attrib_buf;
+		}
 
-	return success;
-}
-int snaky_parse_target_attrib_value_buf(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, char *buffer, size_t buffer_size, snaky_attrib_info *out_info)
-{
-	if(snaky_parse_target_attrib_buf(str, attrib_name, buffer, buffer_size, out_info))
-		return snaky_parse_value(str, buffer, out_info->data_type, out_value);
-	return 0;
-}
-int snaky_parse_target_attrib_value_str(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_string *buffer, snaky_attrib_info *out_info)
-{
-	if(snaky_parse_target_attrib_str(str, attrib_name, buffer, out_info))
-		return snaky_parse_value(str, buffer->data, out_info->data_type, out_value);
-	return 0;
+		if(snaky_parse_target_attrib_buf(str, query, buf, sizeof(buf), NULL))
+		{
+			void *value = ((char*) out_value) + (i * elem_size);
+			int success = 0;
+
+			/*
+			   special case for SNAKY_STRING because snaky_parse_value(...) does
+			   not work for the SNAKY_STRING data type
+			*/
+			if(data_type == SNAKY_STRING)
+			{
+				strncpy((char*) value, buf, elem_size - 1);
+				((char*) value)[elem_size - 1] = '\0';
+				success = 1;
+			}
+			else
+				success = snaky_parse_value(str, buf, data_type, value);
+
+			if(!success)
+			{
+				vl_log(VL_ERROR, "Failed to parse array: '%s'!\n", attrib_name);
+				return 0;
+			}
+		}
+	}
+
+	return 1;
 }
 int snaky_parse_data_type(snaky_data_type data_type, char *buffer, size_t buffer_size)
 {
@@ -3328,8 +3340,8 @@ int snaky_parse_data_type(snaky_data_type data_type, char *buffer, size_t buffer
 		case SNAKY_STRING:
 			snprintf(buffer, buffer_size, "string");
 			break;
-		case SNAKY_ATTRIB_STRING:
-			snprintf(buffer, buffer_size, "attribs");
+		case SNAKY_OBJECT:
+			snprintf(buffer, buffer_size, "obj");
 			break;
 		default:
 			vl_log(VL_ERROR, "Unknown data type: %d!\n", data_type);
@@ -3363,74 +3375,8 @@ int snaky_parse_object(const char *str, void *target_struct, snaky_obj_field *fi
 		if(field->count == 0)
 			field->count = 1;
 
-		// num_elem is the n-th elem within the field (always 1 for single-value fields)
-		for(size_t num_elem = 0; num_elem < field->count; ++num_elem)
-		{
-			const char *query = field->name;
-
-			// see if the field is an array
-			if(field->count > 1)
-			{
-				// if so, append the array index to the target attribute so it will be properly parsed
-
-				// but first convert the linear index into a multidimensional index
-				char result_index[SNAKY_BUF_SIZE] = {0};
-				size_t dimensions[SNAKY_MAX_ARR_DIMENSIONS] = {0};
-				size_t num_dimensions = 0;
-				if(!parse_dimensions(str, query, strlen(query), dimensions, &num_dimensions))
-					return 0;
-				if(!get_multidimensional_index(str, num_elem, dimensions, num_dimensions, result_index, sizeof(result_index), NULL, 0))
-					return 0;
-
-				// insert the indices at end of the target attribute name
-				snprintf(target_attrib_buf, sizeof(target_attrib_buf), "%s%s", field->name, result_index);
-				query = target_attrib_buf;
-			}
-
-			if(snaky_parse_target_attrib_buf(str, query, buf, sizeof(buf), NULL))
-			{
-				void *value = ((char*) target_struct) + field->offset + (num_elem * field->size);
-				int success = 0;
-
-				// TODO make this repeated block a macro or function? (repeated logic in snaky_parse_value(...))
-				switch(field->data_type)
-				{
-					case SNAKY_CHAR:
-						char c = '\0';
-						if((success = snaky_parse_char(buf, &c)))
-							*((char*) value) = c;
-						break;
-					case SNAKY_BOOL:
-						bool b = 0;
-						if((success = snaky_parse_bool(buf, &b)))
-							*((bool*) value) = b;
-						break;
-					case SNAKY_INT:
-						int i = 0;
-						if((success = snaky_parse_int(str, buf, &i)))
-							*((int*) value) = i;
-						break;
-					case SNAKY_FLOAT:
-						float f = 0.0f;
-						if((success = snaky_parse_float(str, buf, &f)))
-							*((float*) value) = f;
-						break;
-					case SNAKY_DOUBLE:
-						double d = 0.0;
-						if((success = snaky_parse_double(str, buf, &d)))
-							*((double*) value) = d;
-						break;
-					case SNAKY_STRING:
-						strncpy((char*) value, buf, field->size - 1);
-						((char*) value)[field->size - 1] = '\0';
-						success = 1;
-						break;
-					default:
-						vl_log(VL_ERROR, "Invalid data type in snaky_parse_object(...): %d\n", field->data_type);
-						return 0;
-				}
-			}
-		}
+		if(!snaky_parse_target_attrib_value(str, field->name, field->data_type, target_struct + field->offset, field->count, field->size))
+			return 0;
 	}
 
 	return 1;

@@ -174,7 +174,7 @@ typedef enum snaky_data_type
 	/**
 	  Represents the attribute string type.
 	*/
-	SNAKY_ATTRIB_STRING
+	SNAKY_OBJECT
 } snaky_data_type;
 
 /**
@@ -636,25 +636,6 @@ SNAKY_API int snaky_set_attribs_str(snaky_string *str, const char *attribs);
 SNAKY_API size_t snaky_count_attribs(const char *str);
 
 /**
-  Determines if an attribute is a string.
-
-  String attributes must be wrapped
-  around {}, like this:
-
-  "< some_str = {  MY STRING   } >"
-*/
-SNAKY_API bool snaky_is_string(const char *str);
-/**
-  Determines if the given string is the beginning
-  of an attribute string.
-
-  For a string to be the start of an attribute
-  string, the first char must be '<'
-  and a matching '>' has to be found.
-*/
-SNAKY_API bool snaky_is_attrib_string(const char *str);
-
-/**
   Finds the next instance of an attribute within
   a string and returns a pointer to the start of
   the attribute name in the original string.
@@ -802,58 +783,39 @@ SNAKY_API int snaky_parse_float(const char *origin, const char *str, float *out_
 */
 SNAKY_API int snaky_parse_double(const char *origin, const char *str, double *out_value);
 /**
-  Similarly to other snaky_parse_[type] functions, this function
-  parses a generic value based on a target data type. More specifically,
-  this function is intended for numerical expressions. The
-  SNAKY_ATTRIB_STRING, SNAKY_ARRAY, and SNAKY_STRING data types
-  are not supported in this function. For these 3 types, you
-  should use the snaky_parse_target_attrib...(...) functions instead.
+  Parses a value into a specified type.
 
-  @important Because this function is generic and
-  needs to be able to determine if parsing failed or not,
-  the 'out_success' pointer cannot be NULL.
+  @param origin The start of the whole attribute string.
+  @param str The string containing the value to parse.
+  @param target_type The data type to parse the value into.
+  @param out_value Where the parsed value should be placed.
 
-  @param origin The start of the whole attribute string. This used
-  for resolving attribute names in expressions throughout the string.
-  @param str The string holding the generic value. This is not
-  an attribute string.
-  @param target_type The data type to try to parse
-  the value as. For example, using SNAKY_INT
-  indicates the value should be parsed as an integer.
-  @param out_value A pointer to the actual variable
-  that will hold the final parsed result.
-  @param out_success A pointer to an int that indicates whether
-  or not the function succeeded. It will be equal to 1 if it
-  succeeded, and 0 if it failed.
+  @important The SNAKY_ARRAY, SNAKY_STRING, and SNAKY_OBJECT
+  data types do not work in this function.
 
   @return 1 on success, 0 on failure.
-
-  @see snaky_parse_target_attrib_value(const char*, const char*, snaky_data_type, void*, const char**, const char**, int*)
 */
 SNAKY_API int snaky_parse_value(const char *origin, const char *str, snaky_data_type target_type, void *out_value);
 /**
-  Parses a generic value just like snaky_parse_value(...) but obtains
-  the value from an attribute from an attribute string.
+  Reads an attribute value and inserts the read value
+  into a block of memory.
 
-  @return 1 on success, 0 on failure.
-
-  @see snaky_parse_value(const char*, snaky_data_type, void*)
+  @param str The start of the whole attribute string.
+  @param attrib_name The name of the attribute to parse
+  the value of.
+  @param data_type The type of the element(s) being parsed.
+  @param out_value The block of memory where the parsed
+  values should be placed.
+  @param num_elems The number of total elements
+  that should be parsed. For arrays, it should be equal
+  to the total number of elements in the array excluding any
+  nested arrays. For example, for this array: '[2, 4, 6],'
+  the 'num_elems' value should be 3. But for this array:
+  '[[2, 4, 6], [11, 13, 15]],' the 'num_elems' value should
+  be 6, since there are 6 integers in the entire array.
+  @param elem_size The size of each element being parsed.
 */
-SNAKY_API int snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_attrib_info *out_info);
-/**
-  Same as snaky_parse_target_attrib_value(...) but plabuffer
-  the parsed attribute value into a buffer.
-
-  @see snaky_parse_target_attrib_value(const char*, const char*, snaky_data_type, void*, snaky_attrib_info*)
-*/
-SNAKY_API int snaky_parse_target_attrib_value_buf(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, char *buffer, size_t buffer_size, snaky_attrib_info *out_info);
-/**
-  Same as snaky_parse_target_attrib_value_buf(...) but uses a
-  snaky_string instead of a normal buffer.
-
-  @see snaky_parse_target_attrib_value_buf(const char*, const char*, snaky_data_type, void*, char*, size_t, snaky_attrib_info*)
-*/
-SNAKY_API int snaky_parse_target_attrib_value_str(const char *str, const char *attrib_name, snaky_data_type target_type, void *out_value, snaky_string *buffer, snaky_attrib_info *out_info);
+SNAKY_API int snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type data_type, void *out_value, size_t num_elems, size_t elem_size);
 /**
   Parses a data type into a string.
 
@@ -937,7 +899,7 @@ SNAKY_API int snaky_parse_data_type(snaky_data_type data_type, char *buffer, siz
   thing you have to add is '.count = NUM_ELEMENTS_IN_ARRAY'
   in the respective snaky_obj_field struct. For example,
   for this array: '[2, 4, 6],' the '.count' value
-  should be 3. But for this array: '[[2, 4, 6], [9, 11, 13]],'
+  should be 3. But for this array: '[[2, 4, 6], [11, 13, 15]],'
   the '.count' value should be 6, since there are 6 integers
   in the entire array.
 
