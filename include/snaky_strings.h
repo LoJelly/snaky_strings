@@ -75,6 +75,12 @@
 #define SNAKY_MAX_ARGS 16
 
 /**
+  Indicates an attribute has no value assigned
+  to it when parsed.
+*/
+#define SNAKY_UNDEF "UNDEF"
+
+/**
   Contains string data.
 
   snaky_strings are primarily
@@ -249,7 +255,7 @@ typedef struct snaky_attrib_info
 	  This includes any whitespace,
 	  the length of the name and value,
 	  and any other required characters
-	  like the ';' or '=.'
+	  like the ';' or '='.
 	*/
 	size_t total_len;
 
@@ -257,22 +263,41 @@ typedef struct snaky_attrib_info
 	  The position of this attribute's
 	  name within the original string.
 	*/
-	const char *name_start_pos;
+	const char *name_pos;
 	/**
-	  The position of this attribute's
+	  The starting position of this attribute's
 	  value within its original string.
 	*/
 	const char *value_start_pos;
 	/**
+	  The ending position of this attribute's
+	  value within its original string.
+	*/
+	const char *value_end_pos;
+	/**
 	  The position of the next attribute
 	  in this attribute's original string.
 	*/
-	const char *next_start_pos;
+	const char *next_attrib_pos;
+	/**
+	  The position of the next nested
+	  attribute string (also referred to
+	  as objects in snaky_strings) in the original
+	  attribute string.
+	*/
+	const char *next_object_pos;
 
 	/**
 	  The attribute's data type.
 	*/
 	snaky_data_type data_type;
+
+	/**
+	  If the attribute is an array,
+	  this value will be equal to
+	  the length of the array.
+	*/
+	size_t array_length;
 } snaky_attrib_info;
 
 /**
@@ -450,6 +475,47 @@ SNAKY_API int snaky_strequals(const snaky_string *str1, const snaky_string *str2
 SNAKY_API int snaky_realloc_str(snaky_string *str, size_t bytes);
 
 /**
+  Finds the end of an array.
+
+  @note The 'start' value should point to the
+  opening '[' character.
+
+  @return A valid pointer on success, NULL on failure.
+*/
+SNAKY_API const char *snaky_find_end_of_array(const char *start);
+/**
+  Finds the end of an attribute string.
+
+  @note The 'start' value should point to the
+  opening '{<' characters.
+
+  @return A valid pointer on success, NULL on failure.
+*/
+SNAKY_API const char *snaky_find_end_of_attribs(const char *start);
+
+/**
+  Skips all whitespace in the given string.
+
+  @note You should not use any malloc-ed pointers here
+  because the function moves the pointer forward.
+
+  To obtain the number of spaces skipped, pass a valid
+  pointer to 'out_num_spaces.'
+*/
+SNAKY_API void snaky_skip_whitespace(const char **iter, size_t *out_num_spaces);
+/**
+  Skips all whitespace while moving backwards in a string.
+
+  @note This function requires a 3rd argument: 'origin.'
+  This pointer should point to the beginning of the string
+  in memory so that the function does not move beyond the
+  start of the string.
+
+  @see snaky_skip_whitespace(const char**, size_t*)
+*/
+SNAKY_API void snaky_skip_whitespace_reverse(const char *origin, const char **iter, size_t *out_num_spaces);
+
+/**
   Searches the given string for a specific attribute and tries to parse its value.
 
   Examples:
@@ -494,7 +560,11 @@ SNAKY_API int snaky_realloc_str(snaky_string *str, size_t bytes);
   Additionally, if multiple strings are nested, the names can
   be chained, like this 'v1.v2.v3...'
 
-  @param str The string to search.
+  @param origin The origin of the string to search.
+  @param start Where in the original string the searching should start. Note
+  that in most cases this may be equal to 'origin.' This should
+  differ if you are using destination pointers like 'next_attrib_pos'
+  in the snaky_attrib_info struct.
   @param attrib_name The name of the attribute to search for.
   @param buffer Where to place the value of the found attribute.
   If this is NULL, then the function will only return
@@ -506,25 +576,27 @@ SNAKY_API int snaky_realloc_str(snaky_string *str, size_t bytes);
 
   @return 1 if the attribute was successfully parsed/found, 0 if the
   function fails in any way.
+
+  @see snaky_attrib_info
 */
-SNAKY_API int snaky_parse_target_attrib_buf(const char *str, const char *attrib_name, char *buffer, size_t buffer_size, snaky_attrib_info *out_info);
+SNAKY_API int snaky_parse_target_attrib_buf(const char *origin, const char *start, const char *attrib_name, char *buffer, size_t buffer_size, snaky_attrib_info *out_info);
 /**
   Same as snaky_parse_target_attrib(...) but uses a snaky_string instead
   of a char buffer.
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_parse_target_attrib_buf(const char*, char*, size_t, const char*, const char**, const char**, snaky_data_type*)
+  @see snaky_parse_target_attrib_buf(const char*, const char*, char*, size_t, snaky_attrib_info*)
 */
-SNAKY_API int snaky_parse_target_attrib_str(const char *str, const char *attrib_name, snaky_string *buffer, snaky_attrib_info *out_info);
+SNAKY_API int snaky_parse_target_attrib_str(const char *origin, const char *start, const char *attrib_name, snaky_string *buffer, snaky_attrib_info *out_info);
 /**
   Searches the given string for the very next attribute and tries to parse its value.
 
   @note Because this function parses the next attribute found, two buffers are required;
   one for the name of the attribute parsed, as well as one for its value.
 
-  To automatically walk a string and its attributes, pass a pointer into 'out_start_pos'
-  and then on the next call use 'out_start_pos' as the 'str' attribute string.
+  To automatically walk a string and its attributes, pass a pointer into 'out_info'
+  and then on the next call use 'out_info.next_attrib_pos' as the 'start' argument.
 
   @important When data types are parsed within a string, it can go 2 routes. The first route
   is the explicit route: this means the user directly placed a ':DATA_TYPE' part into
@@ -532,16 +604,16 @@ SNAKY_API int snaky_parse_target_attrib_str(const char *str, const char *attrib_
   to determine the type of the value. Because of this, it will never assume the SNAKY_DOUBLE
   or SNAKY_CHAR types. It can only ever assume SNAKY_BOOL, SNAKY_INT, or SNAKY_FLOAT.
 
-  @see snaky_parse_target_attrib_buf(const char*, const char*, char*, size_t, snaky_attrib_info*)
+  @see snaky_parse_target_attrib_buf(const char*, const char*, const char*, char*, size_t, snaky_attrib_info*)
 */
-SNAKY_API int snaky_parse_attrib_buf(const char *str, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, snaky_attrib_info *out_info);
+SNAKY_API int snaky_parse_attrib_buf(const char *origin, const char *start, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, snaky_attrib_info *out_info);
 /**
   Same as snaky_parse_attrib(...) but uses snaky_strings for the name and value
   char buffers.
 
-  @see snaky_parse_attrib_buf(const char*, char*, size_t, char*, size_t, snaky_attrib_info*)
+  @see snaky_parse_attrib_str(const char*, const char*, snaky_string*, char*, size_t, snaky_attrib_info*)
 */
-SNAKY_API int snaky_parse_attrib_str(const char *str, snaky_string *name_str, snaky_string *value_str, snaky_attrib_info *out_info);
+SNAKY_API int snaky_parse_attrib_str(const char *origin, const char *start, snaky_string *name_str, snaky_string *value_str, snaky_attrib_info *out_info);
 
 /**
   Searches the given string for a specific attribute and removes it entirely.
@@ -800,7 +872,11 @@ SNAKY_API int snaky_parse_value(const char *origin, const char *str, snaky_data_
   Reads an attribute value and inserts the read value
   into a block of memory.
 
-  @param str The start of the whole attribute string.
+  @param origin The origin of the whole attribute string.
+  @param start Where the parsing should begin in the attribute
+  string. In most cases, this may be equal to 'origin' unless
+  you are using destination pointers like those in the
+  snaky_attrib_info struct.
   @param attrib_name The name of the attribute to parse
   the value of.
   @param data_type The type of the element(s) being parsed.
@@ -814,8 +890,11 @@ SNAKY_API int snaky_parse_value(const char *origin, const char *str, snaky_data_
   '[[2, 4, 6], [11, 13, 15]],' the 'num_elems' value should
   be 6, since there are 6 integers in the entire array.
   @param elem_size The size of each element being parsed.
+  @param out_info A pointer to a snaky_attrib_info struct.
+
+  @see snaky_attrib_info
 */
-SNAKY_API int snaky_parse_target_attrib_value(const char *str, const char *attrib_name, snaky_data_type data_type, void *out_value, size_t num_elems, size_t elem_size);
+SNAKY_API int snaky_parse_target_attrib_value(const char *origin, const char *start, const char *attrib_name, snaky_data_type data_type, void *out_value, size_t num_elems, size_t elem_size, snaky_attrib_info *out_info);
 /**
   Parses a data type into a string.
 
@@ -910,14 +989,20 @@ SNAKY_API int snaky_parse_data_type(snaky_data_type data_type, char *buffer, siz
   necessary. However, if you are not using the '.value' notation,
   then it will become necessary to set it to 1.
 
-  @param str The original attribute string.
+  @param origin The start of the originalattribute string.
+  @param start Where the object to parse begins in the attribute string.
+  In most cases, this may be equal to 'origin' unless you are using destination
+  pointers like those in the snaky_attrib_info struct.
   @param target_struct A pointer to the struct where the parsed values should be assigned.
   @param fields An array of snaky_obj_field structs.
   @param num_fields The number of snaky_obj_field structs in the array given.
+  @param out_info A pointer to a snaky_attrib_info struct.
 
   @return 1 on success, 0 on failure.
+
+  @see snaky_attrib_info
 */
-SNAKY_API int snaky_parse_object(const char *str, void *target_struct, snaky_obj_field *fields, size_t num_fields);
+SNAKY_API int snaky_parse_object(const char *origin, const char *start, void *target_struct, snaky_obj_field *fields, size_t num_fields, snaky_attrib_info *out_info);
 
 /**
   Determines if a file exists.

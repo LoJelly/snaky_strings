@@ -98,16 +98,36 @@ $(function(){initNavTree('d3/dde/structsnaky__attrib__info.html','../../','da/d1
 <tr class="heading"><td colspan="2"><h2 id="header-pub-attribs" class="groupheader"><a id="pub-attribs" name="pub-attribs"></a>
 Public Attributes</h2></td></tr>
 <tr class="memitem:a9a69c99a73e4d3c1287d03df12cd6bfb" id="r_a9a69c99a73e4d3c1287d03df12cd6bfb"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9a69c99a73e4d3c1287d03df12cd6bfb">total_len</a></td></tr>
-<tr class="memitem:aa3988cf64bb8bd5235d903651af4fb5c" id="r_aa3988cf64bb8bd5235d903651af4fb5c"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa3988cf64bb8bd5235d903651af4fb5c">name_start_pos</a></td></tr>
+<tr class="memitem:a30f14b97cbcf1579b42fdc40cebc6330" id="r_a30f14b97cbcf1579b42fdc40cebc6330"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a30f14b97cbcf1579b42fdc40cebc6330">name_pos</a></td></tr>
 <tr class="memitem:a55bcac93817edf452ddbb72bce2b19e3" id="r_a55bcac93817edf452ddbb72bce2b19e3"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a55bcac93817edf452ddbb72bce2b19e3">value_start_pos</a></td></tr>
-<tr class="memitem:a7f6dafbf62e73962511e4787bfec6f31" id="r_a7f6dafbf62e73962511e4787bfec6f31"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7f6dafbf62e73962511e4787bfec6f31">next_start_pos</a></td></tr>
+<tr class="memitem:a8a31fe15cae1de098bfe6b68a8409da8" id="r_a8a31fe15cae1de098bfe6b68a8409da8"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8a31fe15cae1de098bfe6b68a8409da8">value_end_pos</a></td></tr>
+<tr class="memitem:a69c781ea1f1adf721c8b7741d7cd018b" id="r_a69c781ea1f1adf721c8b7741d7cd018b"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a69c781ea1f1adf721c8b7741d7cd018b">next_attrib_pos</a></td></tr>
+<tr class="memitem:a1c18a8c2a1a81d52d565816c83f641c2" id="r_a1c18a8c2a1a81d52d565816c83f641c2"><td class="memItemLeft" align="right" valign="top">const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1c18a8c2a1a81d52d565816c83f641c2">next_object_pos</a></td></tr>
 <tr class="memitem:ad2809c549efcf2837e2a4c6fea3278ac" id="r_ad2809c549efcf2837e2a4c6fea3278ac"><td class="memItemLeft" align="right" valign="top"><a class="el" href="../../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3b">snaky_data_type</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad2809c549efcf2837e2a4c6fea3278ac">data_type</a></td></tr>
+<tr class="memitem:a16c2db2b55202597a10d6552bbb1fc11" id="r_a16c2db2b55202597a10d6552bbb1fc11"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a16c2db2b55202597a10d6552bbb1fc11">array_length</a></td></tr>
 </table>
 <a name="details" id="details"></a><h2 id="header-details" class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Contains information about an attribute within an attribute string. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00243">243</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00249">249</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 </div><a name="doc-variable-members" id="doc-variable-members"></a><h2 id="header-doc-variable-members" class="groupheader">Member Data Documentation</h2>
+<a id="a16c2db2b55202597a10d6552bbb1fc11" name="a16c2db2b55202597a10d6552bbb1fc11"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a16c2db2b55202597a10d6552bbb1fc11">&#9670;&#160;</a></span>array_length</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">size_t snaky_attrib_info::array_length</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>If the attribute is an array, this value will be equal to the length of the array. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00300">300</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+
+</div>
+</div>
 <a id="ad2809c549efcf2837e2a4c6fea3278ac" name="ad2809c549efcf2837e2a4c6fea3278ac"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ad2809c549efcf2837e2a4c6fea3278ac">&#9670;&#160;</a></span>data_type</h2>
 
@@ -121,41 +141,58 @@ Public Attributes</h2></td></tr>
 </div><div class="memdoc">
 <p>The attribute's data type. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00275">275</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00293">293</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>
-<a id="aa3988cf64bb8bd5235d903651af4fb5c" name="aa3988cf64bb8bd5235d903651af4fb5c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa3988cf64bb8bd5235d903651af4fb5c">&#9670;&#160;</a></span>name_start_pos</h2>
+<a id="a30f14b97cbcf1579b42fdc40cebc6330" name="a30f14b97cbcf1579b42fdc40cebc6330"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a30f14b97cbcf1579b42fdc40cebc6330">&#9670;&#160;</a></span>name_pos</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">const char* snaky_attrib_info::name_start_pos</td>
+          <td class="memname">const char* snaky_attrib_info::name_pos</td>
         </tr>
       </table>
 </div><div class="memdoc">
 <p>The position of this attribute's name within the original string. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00260">260</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00266">266</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>
-<a id="a7f6dafbf62e73962511e4787bfec6f31" name="a7f6dafbf62e73962511e4787bfec6f31"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7f6dafbf62e73962511e4787bfec6f31">&#9670;&#160;</a></span>next_start_pos</h2>
+<a id="a69c781ea1f1adf721c8b7741d7cd018b" name="a69c781ea1f1adf721c8b7741d7cd018b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a69c781ea1f1adf721c8b7741d7cd018b">&#9670;&#160;</a></span>next_attrib_pos</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">const char* snaky_attrib_info::next_start_pos</td>
+          <td class="memname">const char* snaky_attrib_info::next_attrib_pos</td>
         </tr>
       </table>
 </div><div class="memdoc">
 <p>The position of the next attribute in this attribute's original string. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00270">270</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00281">281</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+
+</div>
+</div>
+<a id="a1c18a8c2a1a81d52d565816c83f641c2" name="a1c18a8c2a1a81d52d565816c83f641c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1c18a8c2a1a81d52d565816c83f641c2">&#9670;&#160;</a></span>next_object_pos</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char* snaky_attrib_info::next_object_pos</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>The position of the next nested attribute string (also referred to as objects in snaky_strings) in the original attribute string. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00288">288</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>
@@ -171,9 +208,26 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <p>The total length of the attribute in the original string.</p>
-<p>This includes any whitespace, the length of the name and value, and any other required characters like the ';' or '=.' </p>
+<p>This includes any whitespace, the length of the name and value, and any other required characters like the ';' or '='. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00254">254</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00260">260</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+
+</div>
+</div>
+<a id="a8a31fe15cae1de098bfe6b68a8409da8" name="a8a31fe15cae1de098bfe6b68a8409da8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8a31fe15cae1de098bfe6b68a8409da8">&#9670;&#160;</a></span>value_end_pos</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">const char* snaky_attrib_info::value_end_pos</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<p>The ending position of this attribute's value within its original string. </p>
+
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00276">276</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>
@@ -188,9 +242,9 @@ Public Attributes</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
-<p>The position of this attribute's value within its original string. </p>
+<p>The starting position of this attribute's value within its original string. </p>
 
-<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00265">265</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
+<p class="definition">Definition at line <a class="el" href="../../da/dd1/snaky__strings_8h_source.html#l00271">271</a> of file <a class="el" href="../../da/dd1/snaky__strings_8h_source.html">snaky_strings.h</a>.</p>
 
 </div>
 </div>

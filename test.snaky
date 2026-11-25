@@ -4,5 +4,14 @@
 		width = 1280;
 		height = 720;
 		bg_color = [ 200, 50, 255 ];
+
+		elems = [
+			{<
+				id = play_btn;
+			>},
+			{<
+				id = opt_btn;
+			>},
+		];
 	>};
 >};
