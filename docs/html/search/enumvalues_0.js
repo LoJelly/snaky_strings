@@ -8,7 +8,10 @@ var searchData=
   ['snaky_5ffwrite_5fbinary_5',['SNAKY_FWRITE_BINARY',['../da/dd1/snaky__strings_8h.html#a8117c407ffac2f119d28e31781ccf823a0e9fcda582bc8e8df7167ea24dded1a3',1,'snaky_strings.h']]],
   ['snaky_5ffwrite_5fencrypt_6',['SNAKY_FWRITE_ENCRYPT',['../da/dd1/snaky__strings_8h.html#a8117c407ffac2f119d28e31781ccf823a790022021e7f94b16ebf2ab59f74f1af',1,'snaky_strings.h']]],
   ['snaky_5ffwrite_5ftext_7',['SNAKY_FWRITE_TEXT',['../da/dd1/snaky__strings_8h.html#a8117c407ffac2f119d28e31781ccf823a65841eb230e43e89c287041b41ce14eb',1,'snaky_strings.h']]],
-  ['snaky_5fint_8',['SNAKY_INT',['../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35',1,'snaky_strings.h']]],
-  ['snaky_5fobject_9',['SNAKY_OBJECT',['../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3ba91a38b118331d4faaee17f97c925cced',1,'snaky_strings.h']]],
-  ['snaky_5fstring_10',['SNAKY_STRING',['../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3bae285018080e00a6675669d012eac782b',1,'snaky_strings.h']]]
+  ['snaky_5fgoto_5fend_8',['SNAKY_GOTO_END',['../da/dd1/snaky__strings_8h.html#a26cef4b2770a5171376920fedf2852f4a52d466cd024e2548c66713fb3245a2a1',1,'snaky_strings.h']]],
+  ['snaky_5fgoto_5fstart_9',['SNAKY_GOTO_START',['../da/dd1/snaky__strings_8h.html#a26cef4b2770a5171376920fedf2852f4a0303690e8f04b9e9598eac2e5be396db',1,'snaky_strings.h']]],
+  ['snaky_5fgoto_5fstr_5fend_10',['SNAKY_GOTO_STR_END',['../da/dd1/snaky__strings_8h.html#a26cef4b2770a5171376920fedf2852f4a092a4924ca76d413c4f1bd60d4614e1d',1,'snaky_strings.h']]],
+  ['snaky_5fint_11',['SNAKY_INT',['../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3bad71f31d0060581491ef4c6494c8b5d35',1,'snaky_strings.h']]],
+  ['snaky_5fobject_12',['SNAKY_OBJECT',['../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3ba91a38b118331d4faaee17f97c925cced',1,'snaky_strings.h']]],
+  ['snaky_5fstring_13',['SNAKY_STRING',['../da/dd1/snaky__strings_8h.html#a928561b306efa10e97e0b0879ae8fe3bae285018080e00a6675669d012eac782b',1,'snaky_strings.h']]]
 ];

@@ -334,7 +334,7 @@ int snaky_strcat(snaky_string *str, const char *s)
 
 	size_t s_len = strlen(s);
 
-	if(str->len + s_len + 1 >= str->size)
+	if(str->size + s_len >= str->size)
 	{
 		if(!snaky_realloc_str(str, str->size + s_len))
 			return 0;
@@ -759,6 +759,7 @@ static int match_word(const char **str, const char *str2, size_t str2_len)
 }
 
 typedef const char *(*end_pos_func)(const char*);
+static int prepare_parse_target_attrib(const char *origin, const char *start, const char *attrib_name, snaky_string *sbuffer, char *buffer, size_t buffer_size, snaky_attrib_info *out_info);
 static int parse_value(const char *str_origin, const char *value_start, snaky_string *sbuffer, char *buffer, size_t buffer_size, end_pos_func end_pos_fn, snaky_attrib_info *out_info)
 {
 	const char *end_pos = NULL;
@@ -823,11 +824,7 @@ static int parse_value(const char *str_origin, const char *value_start, snaky_st
 	return_next_attrib_pos(value_start, out_info);
 
 	// as long as the value returned is another attribute, re-parse it
-	if(sbuffer)
-		while(snaky_parse_target_attrib_str(str_origin, str_origin, sbuffer->data, sbuffer, out_info));
-	else if(buffer && buffer_size > 0)
-		while(snaky_parse_target_attrib_buf(str_origin, str_origin, buffer, buffer, buffer_size, out_info));
-
+	while(prepare_parse_target_attrib(str_origin, str_origin, sbuffer ? sbuffer->data : buffer, sbuffer, buffer, buffer_size, out_info));
 	return 1;
 }
 static int find_array_element(const char *array_start, const char *array_end, const int *indices, size_t num_indices, size_t depth, const char **out_elem_start)
@@ -1464,11 +1461,7 @@ static int parse_array_subscript(const char *const str_origin, const char *const
 				}
 
 				// as long as the element is another attribute, re-parse it
-				if(sbuffer)
-					while(snaky_parse_target_attrib_str(str_origin, str_origin, sbuffer->data, sbuffer, out_info));
-				else if(buffer && buffer_size > 0)
-					while(snaky_parse_target_attrib_buf(str_origin, str_origin, buffer, buffer, buffer_size, out_info));
-
+				while(prepare_parse_target_attrib(str_origin, str_origin, sbuffer ? sbuffer->data : buffer, sbuffer, buffer, buffer_size, out_info));
 				return 1;
 			}
 		}
@@ -1589,11 +1582,7 @@ static int prepare_parse_target_attrib(const char *origin, const char *start, co
 			// if the chained attrib uses an array subscript operator, parse accordingly
 			if(parse_array_subscript(origin, chained_attrib, sbuffer, buffer, buffer_size, out_info))
 			{
-				if(sbuffer)
-					while(snaky_parse_target_attrib_str(origin, origin, sbuffer->data, sbuffer, out_info));
-				else if(buffer && buffer_size > 0)
-					while(snaky_parse_target_attrib_buf(origin, origin, buffer, buffer, buffer_size, out_info));
-
+				while(prepare_parse_target_attrib(origin, origin, sbuffer ? sbuffer->data : buffer, sbuffer, buffer, buffer_size, out_info));
 				return 1;
 			}
 
@@ -1722,11 +1711,7 @@ static int prepare_parse_target_attrib(const char *origin, const char *start, co
 	// see if user searching for a value within an array (requires '[N]' in 'attrib_name')
 	if(parse_array_subscript(origin, attrib_name, sbuffer, buffer, buffer_size, out_info))
 	{
-		if(sbuffer)
-			while(snaky_parse_target_attrib_str(origin, origin, sbuffer->data, sbuffer, out_info));
-		else if(buffer && buffer_size > 0)
-			while(snaky_parse_target_attrib_buf(origin, origin, buffer, buffer, buffer_size, out_info));
-
+		while(prepare_parse_target_attrib(origin, origin, sbuffer ? sbuffer->data : buffer, sbuffer, buffer, buffer_size, out_info));
 		return 1;
 	}
 
@@ -1773,7 +1758,6 @@ static int prepare_parse_target_attrib(const char *origin, const char *start, co
 				return 0;
 			}
 
-			//if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
 			if(match_word(&attribs_start, attrib_name, attrib_len))
 				return parse_target_attrib(origin, attribs_start, attrib_name, attrib_len, sbuffer, buffer, buffer_size, out_info);
 
@@ -1795,7 +1779,6 @@ static int prepare_parse_target_attrib(const char *origin, const char *start, co
 				return 0;
 			}
 
-			//if(strncmp(attribs_start, attrib_name, attrib_len) == 0)
 			if(match_word(&attribs_start, attrib_name, attrib_len))
 				return parse_target_attrib(origin, attribs_start, attrib_name, attrib_len, sbuffer, buffer, buffer_size, out_info);
 
@@ -1975,6 +1958,119 @@ int snaky_parse_attrib_str(const char *origin, const char *start, snaky_string *
 	return prepare_parse_attrib(origin, start, name_str, value_str, NULL, 0, NULL, 0, out_info);
 }
 
+static void insert_char_buf(char *buffer, char c)
+{
+	// move all chars at pos one slot over to the right
+	memmove(buffer + 1, buffer, strlen(buffer) + 1);
+	*(buffer++) = c;
+}
+static const char *insert_str_buf(char *buffer, const char *str)
+{
+	size_t str_len = strlen(str);
+
+	for(size_t i = 0; i < str_len; ++i)
+		insert_char_buf(buffer + i, *(str + i));
+
+	return buffer + str_len;
+}
+static int add_attrib(snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *attrib_name, const char *attrib_value, const char *start_pos)
+{
+	size_t str_len = sbuffer ? sbuffer->len : strlen(buffer);
+
+	if(str_len == 0)
+		return 0;
+
+	if(snaky_parse_target_attrib_buf(sbuffer ? sbuffer->data : buffer, sbuffer ? sbuffer->data : buffer, attrib_name, NULL, 0, NULL))
+	{
+		// the attribute already exists, cannot add it
+		vl_log(VL_WARNING, "The attribute '%s' already exists in this attribute string, cannot add it!\n", attrib_name);
+		return 0;
+	}
+
+	// calculate how many chars are required for the new attribute:
+	size_t chars_to_add = 13;
+	size_t new_len = strlen(attrib_name) + strlen(attrib_value) + chars_to_add;
+	size_t new_total_len = str_len + new_len;
+
+	if(sbuffer)
+	{
+		if(new_total_len + 1 >= sbuffer->size && !snaky_realloc_str(sbuffer, new_total_len + 1))
+			return 0;
+	}
+	else if(buffer && buffer_size > 0)
+	{
+		if(new_total_len + 1 >= buffer_size)
+			return 0;
+	}
+
+	/*
+	   now modify the chosen buffer:
+
+	   NOTE: because the snaky_string has already
+	   been reallocated if necessary, a single
+	   buffer pointer can be used here:
+	*/
+	char *start = (char*) start_pos;
+	bool empty = strlen(sbuffer ? sbuffer->data : buffer) == 0;
+
+	/*
+	   if string was empty, start new attrib string containing
+	   the new attribute.
+
+	   also create a new attrib string is the start pos is the end
+	   of another attribute string.
+	*/
+	bool end_of_attrib_str = false;
+	if(empty || (end_of_attrib_str = strncmp(start, ATTRIB_STRING_CLOSING, ATTRIB_STRING_CLOSING_LEN) == 0))
+	{
+		// now skip the ">};" if necessary
+		if(end_of_attrib_str)
+		{
+			// first skip the '>}'
+			start += 2;
+
+			// make sure that attrib string ends with a ';'
+			if(!*start)
+				insert_char_buf(start++, ATTRIB_DELIM);
+			else if(*start == ATTRIB_DELIM)
+				start++;
+			insert_char_buf(start++, ' ');
+		}
+
+		// start a new attrib string
+		start = (char*) insert_str_buf(start++, ATTRIB_STRING_OPENING);
+
+		insert_char_buf(start++, ' ');
+		start = (char*) insert_str_buf(start++, attrib_name);
+		start = (char*) insert_str_buf(start++, " = ");
+		start = (char*) insert_str_buf(start++, attrib_value);
+		insert_char_buf(start++, ATTRIB_DELIM);
+		insert_char_buf(start++, ' ');
+
+		start = (char*) insert_str_buf(start++, ATTRIB_STRING_CLOSING);
+		insert_char_buf(start++, ATTRIB_DELIM);
+
+		return 1;
+	}
+
+	// for any other start positions, add the attrib like normal:
+	insert_char_buf(start++, ' ');
+	start = (char*) insert_str_buf(start++, attrib_name);
+	start = (char*) insert_str_buf(start++, " = ");
+	start = (char*) insert_str_buf(start++, attrib_value);
+	insert_char_buf(start++, ATTRIB_DELIM);
+
+	return 1;
+}
+int snaky_add_attrib_buf(char *buffer, size_t buffer_size, const char *attrib_name, const char *attrib_value, const char *start_pos)
+{
+	return add_attrib(NULL, buffer, buffer_size, attrib_name, attrib_value, start_pos);
+}
+int snaky_add_attrib_str(snaky_string *str, const char *attrib_name, const char *attrib_value, const char *start_pos)
+{
+	return add_attrib(str, NULL, 0, attrib_name, attrib_value, NULL);
+}
+
 int snaky_remove_attrib_buf(char *str, const char *attrib_name)
 {
 	size_t attrib_name_len = attrib_name ? strlen(attrib_name) : 0;
@@ -1992,13 +2088,6 @@ int snaky_remove_attrib_buf(char *str, const char *attrib_name)
 	}
 
 	// the attrib is present in the string so it can be removed:
-
-	/*
-	   the start_pos pointer points to the first character of the attrib value,
-	   so it can be moved backwards to obtain the total length of the substring
-
-	   + 2 for the '=' and attribute separator
-	*/
 	size_t sub_str_len = info.total_len;
 
 	// now sub_str_len represents the total amount of characters that need to be removed
@@ -2062,248 +2151,106 @@ int snaky_remove_attribs_str(snaky_string *str, const char *attribs)
 	return snaky_remove_attribs_buf(str->data, attribs);
 }
 
-static void insert_char_buf(char *buffer, char c)
+static int set_attrib(snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *attrib_name, const char *new_attrib_value)
 {
-	// move all chars at pos one slot over to the right
-	memmove(buffer + 1, buffer, strlen(buffer) + 1);
-	*(buffer++) = c;
-}
-static const char *insert_str_buf(char *buffer, const char *str)
-{
-	size_t str_len = strlen(str);
+	size_t str_len = sbuffer ? sbuffer->len : strlen(buffer);
 
-	for(size_t i = 0; i < str_len; ++i)
-		insert_char_buf(buffer + i, *(str + i));
-
-	return buffer + str_len;
-}
-int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name, const char *new_attrib_value)
-{
-	size_t str_len = strlen(buf);
-
-	if(!buf || str_len >= buffer_size || buffer_size == 0 || !attrib_name || strlen(attrib_name) == 0 || !new_attrib_value || strlen(new_attrib_value) == 0)
+	if(str_len == 0)
 		return 0;
 
 	char *edit_pos = NULL;
 	size_t curr_len = 0;
-	bool attrib_found = false;
 
+	// see if the attrib to modify exists in the attribute string
 	snaky_attrib_info info = {0};
 	char attrib_value[SNAKY_BUF_SIZE];
-	if(snaky_parse_target_attrib_buf(buf, buf, attrib_name, attrib_value, sizeof(attrib_value), &info))
+	if(snaky_parse_target_attrib_buf(sbuffer ? sbuffer->data : buffer, sbuffer ? sbuffer->data : buffer, attrib_name, attrib_value, sizeof(attrib_value), &info))
 	{
 		edit_pos = (char*) info.value_start_pos;
-		// curr_len is equal to length of the found attribute value
 		curr_len = strlen(attrib_value);
-		attrib_found = true;
-	}
 
-	// see if current value is a bool and user passed "OPPOSITE"
-	if(strcmp(new_attrib_value, "OPPOSITE") == 0)
-	{
-		if(strcmp(attrib_value, "TRUE") == 0)
-			new_attrib_value = "FALSE";
-		else if(strcmp(attrib_value, "ON") == 0)
-			new_attrib_value = "OFF";
-		else if(strcmp(attrib_value, "FALSE") == 0)
-			new_attrib_value = "TRUE";
-		else if(strcmp(attrib_value, "OFF") == 0)
-			new_attrib_value = "ON";
-		else
+		// see if current value is a bool and user passed "OPPOSITE"
+		if(strcmp(new_attrib_value, "OPPOSITE") == 0)
 		{
-			vl_log(VL_ERROR, "The 'OPPOSITE' attrib value can only be used on boolean attributes!\n");
-			return 0;
+			if(strcmp(attrib_value, "TRUE") == 0)
+				new_attrib_value = "FALSE";
+			else if(strcmp(attrib_value, "ON") == 0)
+				new_attrib_value = "OFF";
+			else if(strcmp(attrib_value, "FALSE") == 0)
+				new_attrib_value = "TRUE";
+			else if(strcmp(attrib_value, "OFF") == 0)
+				new_attrib_value = "ON";
+			else
+			{
+				vl_log(VL_ERROR, "The 'OPPOSITE' attrib value can only be used on boolean attributes!\n");
+				return 0;
+			}
 		}
-	}
 
-	// if the attrib wasn't found, it must be added
-	size_t new_len = 0;
-	if(attrib_found)
-	{
-		new_len = strlen(new_attrib_value);
+		// if the attrib was found, see how many chars need to be replaced
+		size_t new_len = strlen(new_attrib_value);
 
+		// if more characters are required than the current amount:
 		if(new_len > curr_len)
 		{
+			// see if the new amount would overflow the buffer
 			size_t new_total_len = str_len + (new_len - curr_len);
-			if(new_total_len + 1 > buffer_size)
-				return 0;
-		}
-	}
-	else
-	{
-		// new_len must contain '; attrib_name=attrib_value'
-		new_len = strlen(attrib_name) + strlen(new_attrib_value) + 3;
-
-		size_t new_total_len = str_len + new_len;
-
-		if(new_total_len + 1 > buffer_size)
-			return 0;
-	}
-
-	if(!attrib_found)
-	{
-		/*
-		   add '; attrib_name = new_attrib_value' to string,
-		   unless the attribute string is empty, then just add
-		   'attrib_name=new_attrib_value' to it
-		*/
-
-		// walk forward in string until the next '>' is hit, but preserve the string's origin ptr
-		const char *origin = buf;
-		while(*buf && strncmp(buf, ATTRIB_STRING_CLOSING, ATTRIB_STRING_CLOSING_LEN) != 0)
-		{
-			if(*buf == DOUBLE_QUOTE || *buf == SINGLE_QUOTE)
+			if(sbuffer)
 			{
-				const char *end_of_str = find_end_of_str(buf);
-				if(!end_of_str)
-				{
-					vl_log(VL_ERROR, "Object was never closed in string: '%s'!\n", buf);
+				// increase snaky_string size by (new_len - curr_len)
+				if(new_total_len + 1 >= sbuffer->size && !snaky_realloc_str(sbuffer, sbuffer->size + (new_len - curr_len)))
 					return 0;
-				}
-
-				// jump to end of string
-				buf = (char*) end_of_str;
-				continue;
 			}
-
-			buf++;
+			else if(buffer && buffer_size > 0)
+			{
+				if(new_total_len + 1 >= buffer_size)
+					return 0;
+			}
 		}
 
-		// use origin here instead of the current pointer
-		bool empty = strlen(origin) == 0;
-		size_t num_attribs = empty ? 0 : snaky_count_attribs(origin);
-
-		if(!empty && num_attribs > 0)
-		{
-			insert_char_buf(buf++, ATTRIB_DELIM);
-			insert_char_buf(buf++, ' ');
-		}
-		else if(empty)
-			// insert '{<'
-			buf = (char*) insert_str_buf(buf++, ATTRIB_STRING_OPENING);
-
-		// now insert attrib name
-		buf = (char*) insert_str_buf(buf++, attrib_name);
-
-		// now insert the ' = '
-		insert_char_buf(buf++, '=');
-
-		// now insert the new attrib value
-		buf = (char*) insert_str_buf(buf++, new_attrib_value);
-
-		// close attrib string if necessary
-		if(empty || num_attribs == 0)
-			buf = (char*) insert_str_buf(buf++, ATTRIB_STRING_CLOSING);
-	}
-	else
-	{
-		// modify attrib value directly within string:
-
-		// first shift everything occupying that space to the right
+		// shift all the chars that need replacing to the right
 		memmove(edit_pos + new_len, edit_pos + curr_len, strlen(edit_pos + curr_len) + 1);
 
-		// then copy the new attrib value into the new space
+		// now copy the new attrib value in that same space
 		memcpy(edit_pos, new_attrib_value, new_len);
+
+		return 1;
 	}
 
-	return 1;
+	vl_log(VL_ERROR, "Failed to find the attribute '%s', cannot set it!\n", attrib_name);
+	return 0;
 }
-// TODO make set_attrib_str and set_attrib_buf use one single static function like parse_value uses sbuffer, buffer, and buffer_size
+int snaky_set_attrib_buf(char *buffer, size_t buffer_size, const char *attrib_name, const char *new_attrib_value)
+{
+	return set_attrib(NULL, buffer, buffer_size, attrib_name, new_attrib_value);
+}
 int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char *new_attrib_value)
 {
-	if(!str || !attrib_name || !new_attrib_value || strlen(new_attrib_value) == 0)
-		return 0;
-
-	// copy of str->data pointer
-	char *buf = str->data;
-
-	char *edit_pos = NULL;
-	size_t curr_len = 0;
-	bool attrib_found = false;
-
-	snaky_attrib_info info = {0};
-	char attrib_value[SNAKY_BUF_SIZE];
-	if(snaky_parse_target_attrib_buf(str->data, str->data, attrib_name, attrib_value, sizeof(attrib_value), &info))
-	{
-		edit_pos = (char*) info.value_start_pos;
-		// curr_len is equal to length of the found attribute value
-		curr_len = strlen(attrib_value);
-		attrib_found = true;
-	}
-
-	// see if current value is a bool and user passed "OPPOSITE"
-	if(strcmp(new_attrib_value, "OPPOSITE") == 0)
-	{
-		if(strcmp(attrib_value, "TRUE") == 0)
-			new_attrib_value = "FALSE";
-		else if(strcmp(attrib_value, "ON") == 0)
-			new_attrib_value = "OFF";
-		else if(strcmp(attrib_value, "FALSE") == 0)
-			new_attrib_value = "TRUE";
-		else if(strcmp(attrib_value, "OFF") == 0)
-			new_attrib_value = "ON";
-		else
-		{
-			vl_log(VL_ERROR, "The 'OPPOSITE' attrib value can only be used on boolean attributes!\n");
-			return 0;
-		}
-	}
-
-	// if the attrib wasn't found, it must be added
-	size_t new_len = 0;
-	if(attrib_found)
-	{
-		new_len = strlen(new_attrib_value);
-
-		if(new_len > curr_len)
-		{
-			size_t new_total_len = str->len + (new_len - curr_len);
-			if(new_total_len + 1 > str->size && !snaky_realloc_str(str, new_total_len + 1))
-				return 0;
-		}
-	}
-	else
-	{
-		new_len = strlen(attrib_name) + strlen(new_attrib_value) + 3;
-
-		size_t new_total_len = str->len + new_len;
-
-		if(new_total_len + 1 > str->size && !snaky_realloc_str(str, new_total_len + 1))
-			return 0;
-	}
-
-	int s = snaky_set_attrib_buf(str->data, str->size, attrib_name, new_attrib_value);
-
-	// re-calculate string length
-	str->len = s ? strlen(str->data) : 0;
-
-	return s;
+	return set_attrib(str, NULL, 0, attrib_name, new_attrib_value);
 }
-int snaky_set_attribs_buf(char *str, size_t buffer_size, const char *attribs)
+static int set_attribs(snaky_string *sbuffer, char *buffer, size_t buffer_size, const char *attribs)
 {
-	if(!str || strlen(str) >= buffer_size || buffer_size == 0 || !attribs || strlen(attribs) == 0)
+	size_t str_len = sbuffer ? sbuffer->len : strlen(buffer);
+
+	if(str_len == 0)
 		return 0;
 
-	// because 'attribs' should be its own attribute string, get the attribute data from it
 	snaky_attrib_map map = {0};
 	dynmaps_init(&map);
 	if(map.alloc_failure)
 	{
-		vl_log(VL_ERROR, "Failed to allocate memory for attribute map!\n");
+		vl_log(VL_ERROR, "Failed to allocate memory for snaky_attrib_map!\n");
 		return 0;
 	}
 
 	if(snaky_generate_attrib_map(attribs, &map))
 	{
-		// go through the map
 		for(size_t i = 0; i < map.size; ++i)
 		{
-			// get the attrib name and new value
 			const char *name = map.keys[i];
 			const char *val = map.values[i];
 
-			// set it
-			if(!snaky_set_attrib_buf(str, buffer_size, name, val))
+			if(!set_attrib(sbuffer, buffer, buffer_size, name, val))
 			{
 				dynmaps_free_strkeyval(&map);
 				return 0;
@@ -2314,39 +2261,16 @@ int snaky_set_attribs_buf(char *str, size_t buffer_size, const char *attribs)
 		return 1;
 	}
 
-	vl_log(VL_ERROR, "Failed to set attributes: original string: '%s', target attributes string: '%s'!\n", str, attribs);
+	vl_log(VL_ERROR, "Failed to set attributes: original string: '%s', target attributes string: '%s'!\n", sbuffer ? sbuffer->data : buffer, attribs);
 	return 0;
+}
+int snaky_set_attribs_buf(char *str, size_t buffer_size, const char *attribs)
+{
+	return set_attribs(NULL, str, buffer_size, attribs);
 }
 int snaky_set_attribs_str(snaky_string *str, const char *attribs)
 {
-	if(!str || !attribs || strlen(attribs) == 0)
-		return 0;
-
-	// get attrib data from 'attribs'
-	snaky_attrib_map map = {0};
-	if(snaky_generate_attrib_map(attribs, &map))
-	{
-		// go through the map
-		for(size_t i = 0; i < map.size; ++i)
-		{
-			// get attrib entry
-			const char *name = map.keys[i];
-			const char *value = map.values[i];
-
-			// set it
-			if(!snaky_set_attrib_str(str, name, value))
-			{
-				dynmaps_free_strkeyval(&map);
-				return 0;
-			}
-		}
-
-		dynmaps_free_strkeyval(&map);
-		return 1;
-	}
-
-	vl_log(VL_ERROR, "Failed to set attributes: original string: '%s', target attributes string: '%s'!\n", str->data, attribs);
-	return 0;
+	return set_attribs(str, NULL, 0, attribs);
 }
 
 size_t snaky_count_attribs(const char *str)
@@ -2366,7 +2290,7 @@ size_t snaky_count_attribs(const char *str)
 	return count;
 }
 
-void snaky_goto_attrib(const char *str, const char *attrib_name, const char **out_attrib_pos)
+void snaky_goto_attrib(const char *str, const char *attrib_name, const char **out_attrib_pos, snaky_goto_pos pos)
 {
 	if(!out_attrib_pos)
 		return;
@@ -2378,19 +2302,44 @@ void snaky_goto_attrib(const char *str, const char *attrib_name, const char **ou
 	if(!str || strlen(str) == 0 || !attrib_name || attrib_name_len == 0)
 		return;
 
-	while(*str)
+	const char *origin = str;
+
+	// parse the target attribute:
+	snaky_attrib_info info = {0};
+	if(snaky_parse_target_attrib_buf(origin, str, attrib_name, NULL, 0, &info))
 	{
-		//if(strncmp(str, attrib_name, attrib_name_len) == 0)
-		if(match_word(&str, attrib_name, attrib_name_len))
+		switch(pos)
 		{
-			*out_attrib_pos = str;
-			return;
+			case SNAKY_GOTO_START:
+				// go one character before the start of the matched attrib name
+				str = info.name_pos - 1;
+				break;
+			case SNAKY_GOTO_END:
+				// go to the end of the current attribute
+				str = (info.name_pos - 1) + info.total_len;
+				break;
+			case SNAKY_GOTO_STR_END:
+				// start at end of the attribute
+				str = (info.name_pos - 1) + info.total_len;
+
+				// now go to the first instance of '>}'
+				while(*str && strncmp(str, ATTRIB_STRING_CLOSING, ATTRIB_STRING_CLOSING_LEN) != 0)
+					str++;
+
+				// make sure string wasn't terminated
+				if(!*str)
+				{
+					vl_log(VL_ERROR, "Cannot goto attribute '%s' because the string was terminated: '%s'!\n", attrib_name, origin);
+					return;
+				}
+				break;
+			default:
+				vl_log(VL_ERROR, "Unknown snaky_goto_pos in snaky_goto_attrib(...): %d!\n", pos);
+				break;
 		}
-
-		str++;
+		*out_attrib_pos = str;
+		return;
 	}
-
-	vl_log(VL_ERROR, "No attribute with this name '%s' found!\n", attrib_name);
 }
 void snaky_goto_label(const char *str, const char *label_name, const char **out_pos)
 {
@@ -2417,7 +2366,6 @@ void snaky_goto_label(const char *str, const char *label_name, const char **out_
 			snaky_skip_whitespace(&str, NULL);
 
 			// now see if the name matches
-			//if(strncmp(str, label_name, label_name_len) == 0)
 			if(match_word(&str, label_name, label_name_len) == 0)
 			{
 				// if the names match, now move to the first valid char after the closing "]/" characters

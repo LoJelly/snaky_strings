@@ -347,6 +347,48 @@ typedef struct snaky_obj_field
 } snaky_obj_field;
 
 /**
+  When using snaky_goto_attrib(...) this value determines
+  where the returned position pointer should point to in the original
+  attribute string.
+*/
+typedef enum snaky_goto_pos
+{
+	/**
+	  The default goto pos for snaky_goto_attrib(...).
+
+	  When using this value, the returned position pointer
+	  points to the first character in the attribute's name
+	  in the original attribute string.
+	*/
+	SNAKY_GOTO_START,
+	/**
+	  When using this value, the returned position pointer
+	  points to the ';' after the last character in the attribute's
+	  value in the original attribute string.
+	*/
+	SNAKY_GOTO_END,
+	/**
+	  When using this value, the returned position pointer
+	  points to the '>' in the ending of the current attribute
+	  string.
+
+	  For example, in this attribute string:
+
+	  '{< x = 32; >};'
+
+	  using SNAKY_GOTO_STR_END would return the position
+	  of the '>' after '32; .' This is because the snaky_add_attrib...(...)
+	  functions rely on the character at the starting position to determine
+	  how to add the new attribute. In this case, SNAKY_GOTO_STR_END results
+	  in a new attribute string being created and appended to the end of the
+	  current attribute string.
+
+	  @see snaky_add_attrib_buf()
+	*/
+	SNAKY_GOTO_STR_END
+} snaky_goto_pos;
+
+/**
   Determines how data should be written to a file.
 */
 typedef enum snaky_fwrite_mode
@@ -421,7 +463,7 @@ SNAKY_API int snaky_shutdown(void);
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_free_str(snaky_string*)
+  @see snaky_free_str()
 */
 SNAKY_API int snaky_create_str(snaky_string *str, char *data);
 /**
@@ -436,8 +478,8 @@ SNAKY_API int snaky_create_str(snaky_string *str, char *data);
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_free_str(snaky_string*)
-  @see snaky_strcpy(snaky_string*, const char*)
+  @see snaky_free_str()
+  @see snaky_strcpy()
 */
 SNAKY_API int snaky_prepare_str(snaky_string *str, size_t bytes);
 /**
@@ -511,7 +553,7 @@ SNAKY_API void snaky_skip_whitespace(const char **iter, size_t *out_num_spaces);
   in memory so that the function does not move beyond the
   start of the string.
 
-  @see snaky_skip_whitespace(const char**, size_t*)
+  @see snaky_skip_whitespace()
 */
 SNAKY_API void snaky_skip_whitespace_reverse(const char *origin, const char **iter, size_t *out_num_spaces);
 
@@ -528,10 +570,6 @@ SNAKY_API void snaky_skip_whitespace_reverse(const char *origin, const char **it
 
   Attributes must be separated by the ',' character,
   and they must be assigned using the '=' character.
-
-  @important All attribute strings should be char arrays,
-  unless you do not plan on modifying the string, then it
-  can be a const char*.
 
   @note Whitespace is allowed in attribute strings. These
   two strings are equal when parsed: '<id=obj4,x=20,y=300>'
@@ -586,7 +624,7 @@ SNAKY_API int snaky_parse_target_attrib_buf(const char *origin, const char *star
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_parse_target_attrib_buf(const char*, const char*, char*, size_t, snaky_attrib_info*)
+  @see snaky_parse_target_attrib_buf()
 */
 SNAKY_API int snaky_parse_target_attrib_str(const char *origin, const char *start, const char *attrib_name, snaky_string *buffer, snaky_attrib_info *out_info);
 /**
@@ -604,21 +642,55 @@ SNAKY_API int snaky_parse_target_attrib_str(const char *origin, const char *star
   to determine the type of the value. Because of this, it will never assume the SNAKY_DOUBLE
   or SNAKY_CHAR types. It can only ever assume SNAKY_BOOL, SNAKY_INT, or SNAKY_FLOAT.
 
-  @see snaky_parse_target_attrib_buf(const char*, const char*, const char*, char*, size_t, snaky_attrib_info*)
+  @see snaky_parse_target_attrib_buf()
 */
 SNAKY_API int snaky_parse_attrib_buf(const char *origin, const char *start, char *name_buffer, size_t name_buffer_size, char *value_buffer, size_t value_buffer_size, snaky_attrib_info *out_info);
 /**
   Same as snaky_parse_attrib(...) but uses snaky_strings for the name and value
   char buffers.
 
-  @see snaky_parse_attrib_str(const char*, const char*, snaky_string*, char*, size_t, snaky_attrib_info*)
+  @see snaky_parse_attrib_str()
 */
 SNAKY_API int snaky_parse_attrib_str(const char *origin, const char *start, snaky_string *name_str, snaky_string *value_str, snaky_attrib_info *out_info);
 
 /**
-  Searches the given string for a specific attribute and removes it entirely.
+  Adds an attribute to an attribute string.
 
-  @important All attribute strings should be char arrays.
+  @note The function does nothing if the attribute
+  already exists in the attribute string.
+
+  @param buffer The original attribute string.
+  @param buffer_size How large the attribute string is in bytes.
+  @param attrib_name The name of the attribute.
+  @param attrib_value The value of the attribute.
+  @param start_pos Where the attribute should be added.
+  If the start pos is the end of another attribute (the ';'),
+  the new attribute is added directly after that other attribute.
+  If the start pos is the end of an attribute string, another
+  attribute string is created containing the new attribute.
+  If the start pos is the start of an attribute string, it is
+  added at the start of that attribute string. If the
+  string is empty, a new attribute string is always created containing
+  the new attribute. If the string is empty, then 'start_pos' can be
+  NULL or it can point to the start of the string.
+
+  @note The 'start_pos' argument can be obtained using the snaky_goto_attrib(...)
+  function.
+
+  @see snaky_goto_attrib()
+
+  @return 1 on success, 0 on failure.
+*/
+SNAKY_API int snaky_add_attrib_buf(char *buffer, size_t buffer_size, const char *attrib_name, const char *attrib_value, const char *start_pos);
+/**
+  Same as snaky_add_attrib_buf(...) but uses a snaky_string instead.
+
+  @see snaky_add_attrib_buf()
+*/
+SNAKY_API int snaky_add_attrib_str(snaky_string *str, const char *attrib_name, const char *attrib_value, const char *start_pos);
+
+/**
+  Searches the given string for a specific attribute and removes it entirely.
 
   @return 1 on success, 0 on failure.
 */
@@ -626,7 +698,7 @@ SNAKY_API int snaky_remove_attrib_buf(char *str, const char *attrib_name);
 /**
   Same as snaky_remove_attrib(...) but uses a snaky_string instead.
 
-  @see snaky_remove_attrib(char*, const char*)
+  @see snaky_remove_attrib()
 */
 SNAKY_API int snaky_remove_attrib_str(snaky_string *str, const char *attrib_name);
 /**
@@ -637,12 +709,12 @@ SNAKY_API int snaky_remove_attrib_str(snaky_string *str, const char *attrib_name
 
   For example, if the target attribute string is:
 
-  "{<x=100,y=200,z=300>}"
+  "{< x = 100, y = 200, z = 300 >}"
 
   To remove both the 'x' and 'z' attributes, you would use this
   function like so:
 
-  'snaky_remove_attribs_buf(str, sizeof(str), "{<x;z;>}");'
+  'snaky_remove_attribs_buf(str, sizeof(str), "{< x; z; >}");'
 
   @note The attributes in the 'attribs' string are not defined.
   That is because they are only being removed, not set.
@@ -651,26 +723,26 @@ SNAKY_API int snaky_remove_attribs_buf(char *str, const char *attribs);
 /**
   Same as snaky_remove_attribs_buf(...) but uses a snaky_string instead.
 
-  @see snaky_remove_attribs_buf(char*, const char*)
+  @see snaky_remove_attribs_buf()
 */
 SNAKY_API int snaky_remove_attribs_str(snaky_string *str, const char *attribs);
 
 /**
   Modifies an attribute value directly in a string.
 
-  If the attribute is not found, it is automatically
-  appended to the buffer, if possible.
+  @note This function will not add the attribute to the
+  string if it is not found.
 
   @return 1 on success, 0 on failure.
 */
-SNAKY_API int snaky_set_attrib_buf(char *buf, size_t buffer_size, const char *attrib_name, const char *new_attrib_value);
+SNAKY_API int snaky_set_attrib_buf(char *buffer, size_t buffer_size, const char *attrib_name, const char *new_attrib_value);
 /**
   Same as snaky_set_attrib(...) but uses a snaky_string instead.
 
   If the attribute is not found, it is automatically
   appended to the string, if possible.
 
-  @see snaky_set_attrib_buf(char*, size_t, const char*, const char*)
+  @see snaky_set_attrib_buf()
 */
 SNAKY_API int snaky_set_attrib_str(snaky_string *str, const char *attrib_name, const char *new_attrib_value);
 /**
@@ -698,7 +770,7 @@ SNAKY_API int snaky_set_attribs_buf(char *str, size_t buffer_size, const char *a
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_set_attribs_buf(char*, size_t, const char*)
+  @see snaky_set_attribs_buf()
 */
 SNAKY_API int snaky_set_attribs_str(snaky_string *str, const char *attribs);
 
@@ -714,11 +786,11 @@ SNAKY_API size_t snaky_count_attribs(const char *str);
 
   If 'out_attrib_pos' is NULL, the function will not
   do anything. Otherwise, it will be equal to
-  the pointer to the first character in the
-  matching attribute name in the original string,
-  or NULL if the attribute is not found.
+  the character matching the snaky_goto_pos given.
+
+  @see snaky_goto_pos
 */
-SNAKY_API void snaky_goto_attrib(const char *str, const char *attrib_name, const char **out_attrib_pos);
+SNAKY_API void snaky_goto_attrib(const char *str, const char *attrib_name, const char **out_attrib_pos, snaky_goto_pos pos);
 /**
   Finds the given label within an attribute string
   and returns the position of it.
@@ -774,14 +846,14 @@ SNAKY_API int snaky_generate_attrib_map(const char *str, snaky_attrib_map *map);
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_destroy_attrib_list(snaky_attrib_list*)
+  @see snaky_destroy_attrib_list()
 */
 SNAKY_API int snaky_generate_attrib_list(const char *str, snaky_attrib_list *list);
 /**
   Destroys and frees any memory associated with the given
   attribute list.
 
-  @see snaky_generate_attrib_list(const char*, snaky_attrib_list*)
+  @see snaky_generate_attrib_list()
   @see snaky_attrib_list
 */
 SNAKY_API int snaky_destroy_attrib_list(snaky_attrib_list *list);
@@ -1027,7 +1099,7 @@ SNAKY_API int snaky_read_file_buf(const char *file_path, char *buffer, size_t bu
   Same as snaky_read_file(...)
   but uses a snaky_string instead.
 
-  @see snaky_read_file(const char*, char*, size_t, snaky_fwrite_mode)
+  @see snaky_read_file()
 */
 SNAKY_API int snaky_read_file_str(const char *file_path, snaky_string *str, snaky_fwrite_mode mode);
 /**
@@ -1087,7 +1159,7 @@ SNAKY_API int snaky_write_file_buf(const char *file_path, const char *buffer, sn
 
   @return 1 on success, 0 on failure.
 
-  @see snaky_read_file(const char*, char*, size_t)
+  @see snaky_read_file()
 */
 SNAKY_API int snaky_get_next_line(char **cursor, char *buffer, size_t buffer_size);
 
@@ -1155,7 +1227,7 @@ SNAKY_API int snaky_define_eval_function(const char *str, snaky_eval_func func);
   number of arguments in the array.
   @param num_args The expected number of arguments the function will take in.
 
-  @see snaky_define_eval_function(const char*, snaky_eval_func)
+  @see snaky_define_eval_function()
 */
 SNAKY_API int snaky_define_function(const char *str, snaky_data_type return_type, void *func, size_t num_args);
 
